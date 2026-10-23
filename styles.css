@@ -12,6 +12,10 @@
   --feed-max:614px;--feed-bar-h:52px;--feed-car-h:min(100vw,72vh,614px);--feed-gap:28px;--feed-bg:var(--bg);
   /* sheets */
   --sheet-max:420px;
+  /* sign-up banner */
+  --banner-bg:var(--accent);--banner-ink:#fff;--banner-h:46px;
+  /* archive */
+  --arch-tint:#f6f1ea;
   /* sharing */
   --switch-w:46px;--switch-h:28px;--switch-off:#d8cfc5;--switch-on:var(--accent);--switch-knob:#fff;
   /* missing-photo placeholder */
@@ -162,3 +166,15 @@ dialog.sheet{max-width:var(--sheet-max);margin:auto auto calc(var(--space-md) + 
 /* viewer: no owner controls at all */
 .viewer #add,.viewer #menuBtn,.viewer .pm,.viewer #fMenu,.viewer .fnew,.viewer #pHint,.viewer #catHint,.viewer #loginV{display:none!important}
 .viewer .ptitle{cursor:default}
+
+/* --- v9: archive --- */
+#folderV.arch .fhead{background:var(--arch-tint);border-radius:var(--radius-sm);padding:var(--space-xs)}
+.viewer #mArchive,.viewer #aHint{display:none!important}
+
+/* --- v10: sign-up --- */
+.mkbanner{position:sticky;top:0;z-index:15;display:flex;align-items:center;gap:var(--space-sm);min-height:var(--banner-h);padding:calc(var(--space-xs) + env(safe-area-inset-top)) var(--space-sm) var(--space-xs) var(--space-md);background:var(--banner-bg);color:var(--banner-ink);font-size:14px}
+.mkbanner span{flex:1}.mkbanner .btn{background:var(--banner-ink);color:var(--banner-bg);border-color:var(--banner-ink);text-decoration:none;padding:5px 12px;font-size:13px;font-weight:600}
+.mkbanner .icon{color:var(--banner-ink);width:30px;height:30px}.mkbanner .icon:hover{background:rgba(255,255,255,.15)}
+.viewer .mkbanner~#appV .profile{padding-top:var(--space-sm)}
+.linkbtn{border:0;background:none;color:var(--accent);padding:4px;text-decoration:underline;font-size:14px}
+.lsub{text-align:center;margin:-4px 0 4px}

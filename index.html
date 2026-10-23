@@ -10,17 +10,21 @@
 <meta name="apple-mobile-web-app-title" content="Journal"><meta name="apple-mobile-web-app-status-bar-style" content="default">  <link rel="stylesheet" href="styles.css">
 </head><body>
 <section id="loginV" hidden><form class="login" id="loginF"><h1 style="text-align:center">Photo Journal</h1>
+<p class="msg lsub" id="lsub" hidden>Create your own private photo journal.</p>
 <input id="em" type="email" placeholder="Email" autocomplete="username" required>
 <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
-<button class="primary" type="submit">Sign in</button><button type="button" id="magic">Email me a sign-in link</button><div class="msg" id="lmsg"></div></form></section>
+<input id="pw2" type="password" placeholder="Confirm password" autocomplete="new-password" hidden>
+<button class="primary" type="submit" id="lgo">Sign in</button><button type="button" id="magic">Email me a sign-in link</button><div class="msg" id="lmsg" role="status"></div>
+<button type="button" class="linkbtn" id="lmode">New here? Create an account</button></form></section>
+<div class="mkbanner" id="mkB" hidden><span>Make your own photo journal</span><a class="btn primary" id="mkGo" href="./#signup">Create yours</a><button type="button" class="icon" id="mkX" aria-label="Dismiss">×</button></div>
 <section id="appV" hidden>
 <main>
 <section class="profile">
  <div class="ptop"><h1 class="ptitle" id="pTitle">PHOTO JOURNAL</h1><button type="button" class="icon" id="menuBtn" aria-label="Menu" aria-haspopup="true">⋯</button></div>
  <p class="bio" id="pBio"></p>
- <p class="count" id="count"></p><p class="msg" id="pHint" hidden></p>
+ <p class="count" id="count"></p><p class="msg" id="aHint" hidden>Archive needs a quick database update — run migrate-archive.sql in Supabase.</p><p class="msg" id="pHint" hidden></p>
 </section>
-<nav class="tabs" role="tablist"><button type="button" role="tab" class="tab on" id="tabAll" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>All</span></button><button type="button" role="tab" class="tab" id="tabCol" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Collections</span></button></nav>
+<nav class="tabs" id="tabs" role="tablist"><button type="button" role="tab" class="tab on" id="tabAll" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>All</span></button><button type="button" role="tab" class="tab" id="tabCol" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Collections</span></button></nav>
 <div id="allV"><div id="grid" class="grid"></div></div>
 <div id="colV" hidden>
  <h3 class="sec">By month</h3><div class="folders" id="monthF"></div>
@@ -47,20 +51,20 @@
 <div class="row"><button type="button" id="shClose">Done</button></div></div></dialog>
 <section id="naV" hidden><div class="login na"><h1>Not available</h1><p>This page isn't being shared right now, or the link has changed. Ask the owner for a new link.</p></div></section>
 <dialog id="menuD" class="sheet"><div class="sheetb">
- <button type="button" id="mProfile">Edit profile</button><button type="button" id="mShare">Share my page</button><button type="button" id="exp">Export backup</button>
+ <button type="button" id="mProfile">Edit profile</button><button type="button" id="mShare">Share my page</button><button type="button" id="mArchive">Archive</button><button type="button" id="exp">Export backup</button>
  <button type="button" id="out" class="danger">Sign out</button><button type="button" id="mClose">Cancel</button></div></dialog>
 <dialog id="postD" class="sheet"><div class="sheetb">
- <button type="button" id="pmEdit">Edit post</button><button type="button" id="pmDel" class="danger">Delete post</button><button type="button" id="pmClose">Cancel</button></div></dialog>
+ <button type="button" id="pmArch">Archive</button><button type="button" id="pmEdit">Edit post</button><button type="button" id="pmDel" class="danger">Delete post</button><button type="button" id="pmClose">Cancel</button></div></dialog>
 <dialog id="newD"><form class="form" id="newF"><h2>New post</h2>
 <div class="drop" id="drop">Click or drop up to 8 photos here</div><input id="file" type="file" accept="image/*" multiple hidden>
 <div class="thumbs" id="thumbs"></div><div class="msg" id="nmsg"></div>
 <textarea id="newCap" placeholder="Write a caption…"></textarea>
-<div class="when"><label>Date<input type="date" id="newDate" required></label><label>Time <span class="opt">(optional)</span><input type="time" id="newTime"></label></div>
+<div class="when"><label>Date<input type="date" id="newDate" required></label></div>
 <div class="catpick" id="newCats"></div>
 <div class="row"><button type="button" id="newCancel">Cancel</button><button class="primary" id="save" type="submit" disabled>Post</button></div></form></dialog>
 <dialog id="editD"><form class="form" id="editF"><h2>Edit post</h2>
 <textarea id="eCap" placeholder="Caption"></textarea>
-<div class="when"><label>Date<input type="date" id="eDate" required></label><label>Time <span class="opt">(optional)</span><input type="time" id="eTime"></label></div>
+<div class="when"><label>Date<input type="date" id="eDate" required></label></div>
 <div class="catpick" id="eCats"></div>
 <div class="row"><button type="button" id="eCancel">Cancel</button><button class="primary" type="submit" id="eSave">Save</button></div></form></dialog>
 <dialog id="profD"><form class="form" id="profF"><h2>Edit profile</h2>
@@ -80,23 +84,47 @@ const sb=configured?(VIEWER?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY
  :supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}})):null;
 if(VIEWER)document.documentElement.classList.add("viewer");
 const MAX=8,DEF_TITLE="PHOTO JOURNAL";
-let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true,catsOK=true,tab="all",folder=null,feedFilter=null;
+let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true,catsOK=true,archOK=true,tab="all",folder=null,feedFilter=null;
 const catsOf=p=>Array.isArray(p.categories)?p.categories:[];
 const normCat=s=>s.replace(/\s+/g," ").trim().slice(0,40);
 const same=(a,b)=>a.toLowerCase()===b.toLowerCase();
 const pathsOf=p=>{const a=Array.isArray(p.image_paths)?p.image_paths.filter(Boolean):[];return a.length?a:(p.image_path?[p.image_path]:[])};
-const fmt=t=>{const d=new Date(t);return d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})+(hasTime(t)?" · "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}):"")};
+const fmt=t=>new Date(t).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});
 const pad=n=>String(n).padStart(2,"0");
-const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),toTime=d=>pad(d.getHours())+":"+pad(d.getMinutes());
+const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 // no time given -> stored as 12:00:01 local (noon avoids timezone date shifts; :01 marks "no time" so it isn't displayed)
-const fromInputs=(d,t)=>{const[y,m,da]=d.split("-").map(Number);if(!t)return new Date(y,m-1,da,12,0,1).toISOString();const[h,mi]=t.split(":").map(Number);return new Date(y,m-1,da,h,mi,0).toISOString()};
-const hasTime=t=>{const d=new Date(t);return !(d.getHours()===12&&d.getMinutes()===0&&d.getSeconds()===1)};
+// dates are stored at local noon so time zones never shift the calendar day
+const fromDate=d=>{const[y,m,da]=d.split("-").map(Number);return new Date(y,m-1,da,12,0,0).toISOString()};
 function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn;if(!signedIn)closeFeed(true)}
-async function onSession(s){user=s&&s.user;view(!!user);if(user){loadProfile();load();loadShare()}}
+async function onSession(s){user=s&&s.user;profile={title:DEF_TITLE,bio:""};share={ok:false,on:false,token:null};posts=[];folder=null;view(!!user);if(user){if(/^#signup/.test(location.hash))history.replaceState(null,"",location.pathname);loadProfile();load();loadShare()}}
 if(!sb){view(false);$("lmsg").textContent="Not configured yet: add your Supabase URL and anon key to config.js.";$("loginF").querySelectorAll("button,input").forEach(e=>e.disabled=true)}
 else if(VIEWER){startViewer()}
 else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})}
-$("loginF").onsubmit=async e=>{e.preventDefault();$("lmsg").textContent="Signing in…";const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});$("lmsg").textContent=error?error.message:""};
+/* ---------- sign in / sign up ---------- */
+let signup=false;
+function setMode(s){signup=s;$("lgo").textContent=s?"Create account":"Sign in";$("pw2").hidden=!s;$("pw2").required=s;$("magic").hidden=s;$("lsub").hidden=!s;
+ $("pw").autocomplete=s?"new-password":"current-password";$("pw").minLength=s?8:0;$("lmode").textContent=s?"Have an account? Sign in":"New here? Create an account";$("lmsg").textContent=""}
+$("lmode").onclick=()=>{setMode(!signup);history.replaceState(null,"",location.pathname+(signup?"#signup":""))};
+function authMsg(err){const m=(err&&(err.message||""))+"",c=err&&err.code||"";
+ if(/signup.*(disabled|not allowed)|signups not allowed/i.test(m)||c==="signup_disabled")return"Sign-ups are turned off right now.";
+ if(/rate limit|too many|over_email_send_rate/i.test(m)||err&&err.status===429)return"Too many attempts — please wait a few minutes and try again.";
+ if(/already registered|already exists|user_already_exists/i.test(m+c))return"That email already has an account — sign in instead.";
+ if(/invalid login credentials/i.test(m))return"Wrong email or password.";
+ if(/email not confirmed/i.test(m))return"Please confirm your email first (check your inbox), then sign in.";
+ if(/password/i.test(m)&&/(6|8|short|weak)/i.test(m))return"Please choose a longer, stronger password (at least 8 characters).";
+ return m||"Something went wrong. Please try again."}
+$("loginF").onsubmit=async e=>{e.preventDefault();const email=$("em").value.trim(),pw=$("pw").value;
+ if(!signup){$("lmsg").textContent="Signing in…";const{error}=await sb.auth.signInWithPassword({email,password:pw});$("lmsg").textContent=error?authMsg(error):"";return}
+ if(pw.length<8)return $("lmsg").textContent="Password must be at least 8 characters.";
+ if(pw!==$("pw2").value)return $("lmsg").textContent="Passwords don't match.";
+ $("lgo").disabled=true;$("lmsg").textContent="Creating your account…";
+ const{data,error}=await sb.auth.signUp({email,password:pw,options:{emailRedirectTo:location.origin+location.pathname}});$("lgo").disabled=false;
+ if(error)return $("lmsg").textContent=authMsg(error);
+ // Supabase returns a user with no identities when the email is already registered (and confirmation is on)
+ if(data&&data.user&&Array.isArray(data.user.identities)&&data.user.identities.length===0)return $("lmsg").textContent="That email already has an account — sign in instead.";
+ if(data&&data.session){$("lmsg").textContent="";history.replaceState(null,"",location.pathname);return}  // confirmation off: onAuthStateChange signs in
+ setMode(false);$("pw").value="";$("lmsg").textContent="Check your email to confirm, then sign in."};
+if(!VIEWER&&/^#signup\b/.test(location.hash))setMode(true);
 $("magic").onclick=async()=>{if(!$("em").value)return $("lmsg").textContent="Enter your email first.";const{error}=await sb.auth.signInWithOtp({email:$("em").value,options:{shouldCreateUser:false,emailRedirectTo:location.href.split("#")[0]}});$("lmsg").textContent=error?error.message:"Check your email for the link."};
 
 /* ---------- menu ---------- */
@@ -119,9 +147,10 @@ $("profF").onsubmit=async e=>{e.preventDefault();const p={title:($("prTitle").va
 
 /* ---------- posts ---------- */
 async function load(){$("count").textContent="Loading…";
- const{data,error}=await sb.from("posts").select("*").order("created_at",{ascending:false});
+ const{data,error}=await sb.from("posts").select("*").eq("user_id",user.id).order("created_at",{ascending:false});
  if(error){$("count").textContent="Error: "+error.message;return}
  {const pr=await sb.from("posts").select("categories").limit(1);catsOK=!pr.error;if(pr.error)console.warn("categories:",pr.error.message)}
+ {const pa=await sb.from("posts").select("archived").limit(1);archOK=!pa.error;if(pa.error)console.warn("archive:",pa.error.message);$("mArchive").hidden=!archOK}
  posts=data;await signPosts(posts);
  render()}
 /* ---------- signed URLs: per-item errors, batching, refresh before expiry ---------- */
@@ -143,22 +172,27 @@ function photoImg(p,idx,alt){const img=new Image();img.alt=alt||"";img.loading="
  img.onerror=retry;const u=p.urls&&p.urls[idx];if(u)img.src=u;else queueMicrotask(retry);return img}
 function sortPosts(){posts.sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))}
 function tiles(g,list,filter){g.innerHTML="";
- if(!list.length){g.style.display="block";g.innerHTML='<div class="empty">'+(filter?'No posts here yet.':'Your journal is empty.<br>Tap <b>+</b> to add your first photo.')+'</div>';return}
+ if(!list.length){g.style.display="block";g.innerHTML='<div class="empty">'+(filter&&filter.type==='archive'?'Nothing archived yet.<br>Use <b>⋯ → Archive</b> on a post to hide it from your page without deleting it.':filter?'No posts here yet.':'Your journal is empty.<br>Tap <b>+</b> to add your first photo.')+'</div>';return}
  g.style.display="";list.forEach(p=>{const b=document.createElement("button");b.appendChild(photoImg(p,0,p.caption||"Photo"));if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>openFeed(p.id,filter);g.appendChild(b)})}
 const monthKey=p=>{const d=new Date(p.created_at);return d.getFullYear()+"-"+pad(d.getMonth()+1)};
 const monthName=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"})};
-function filterFn(f){if(!f)return()=>true;return f.type==="month"?p=>monthKey(p)===f.key:p=>catsOf(p).some(c=>same(c,f.name))}
+const isArch=p=>p.archived===true;
+// everything except the Archive view excludes archived posts
+function filterFn(f){if(f&&f.type==="archive")return isArch;if(!f)return p=>!isArch(p);
+ return f.type==="month"?p=>!isArch(p)&&monthKey(p)===f.key:p=>!isArch(p)&&catsOf(p).some(c=>same(c,f.name))}
+const live=()=>posts.filter(p=>!isArch(p));
 function allCats(){const m=new Map();const add=c=>{const k=c.toLowerCase();if(!m.has(k))m.set(k,c)};posts.forEach(p=>catsOf(p).forEach(add));extraCats().forEach(add);return[...m.values()].sort((a,b)=>a.localeCompare(b))}
 // categories with no posts yet live only on this device until a post uses them
-const extraCats=()=>{try{return JSON.parse(localStorage.getItem("pj-cats")||"[]")}catch{return[]}};
-const setExtra=l=>localStorage.setItem("pj-cats",JSON.stringify(l));
+const catKey=()=>"pj-cats:"+(user?user.id:"anon");
+const extraCats=()=>{try{return JSON.parse(localStorage.getItem(catKey())||"[]")}catch{return[]}};
+const setExtra=l=>{if(user)localStorage.setItem(catKey(),JSON.stringify(l))};
 function addExtra(c){const l=extraCats();if(!l.some(x=>same(x,c)))l.push(c);setExtra(l)}
 function card(name,list,onclick,cls){const b=document.createElement("button");b.type="button";b.className="fcard"+(cls?" "+cls:"");
  b.innerHTML='<div class="fcov"></div><div class="fn"></div><div class="fc"></div>';b.querySelector(".fn").textContent=name;
  if(list){b.querySelector(".fc").textContent=list.length+(list.length===1?" post":" posts");if(list[0]){b.querySelector(".fcov").appendChild(photoImg(list[0],0,""))}}
  b.onclick=onclick;return b}
 function renderCollections(){const mf=$("monthF"),cf=$("catF");mf.innerHTML="";cf.innerHTML="";
- const months=[...new Set(posts.map(monthKey))];
+ const months=[...new Set(live().map(monthKey))];
  months.forEach(k=>{const f={type:"month",key:k,name:monthName(k)};mf.appendChild(card(f.name,posts.filter(filterFn(f)),()=>openFolder(f)))});
  if(!months.length)mf.innerHTML='<p class="msg">Months appear here once you post.</p>';
  $("catHint").hidden=catsOK||VIEWER;if(!catsOK)return;
@@ -166,16 +200,16 @@ function renderCollections(){const mf=$("monthF"),cf=$("catF");mf.innerHTML="";c
  if(VIEWER)return;const n=card("New category",null,()=>{const v=prompt("Name your category (e.g. a person, place, or trip):");if(!v||!normCat(v))return;const c=normCat(v);if(!allCats().some(x=>same(x,c)))addExtra(c);renderCollections()},"fnew");
  n.querySelector(".fcov").textContent="+";n.querySelector(".fc").textContent="People, places, trips…";cf.appendChild(n)}
 function setTab(t){tab=t;folder=null;$("tabAll").classList.toggle("on",t==="all");$("tabCol").classList.toggle("on",t==="col");$("tabAll").setAttribute("aria-selected",t==="all");$("tabCol").setAttribute("aria-selected",t==="col");showSection()}
-function showSection(){$("allV").hidden=!(tab==="all");$("colV").hidden=!(tab==="col"&&!folder);$("folderV").hidden=!folder}
+function showSection(){$("allV").hidden=!(tab==="all"&&!folder);$("tabs").hidden=!!(folder&&folder.type==="archive");$("colV").hidden=!(tab==="col"&&!folder);$("folderV").hidden=!folder}
 $("tabAll").onclick=()=>setTab("all");$("tabCol").onclick=()=>setTab("col");
 let colY=0;
 function openFolder(f){colY=scrollY;folder=f;renderFolder();showSection();$("folderV").scrollIntoView({block:"start"})}
 function renderFolder(){if(!folder)return;if(folder.type==="cat"){const real=allCats().find(c=>same(c,folder.name));if(!real){folder=null;showSection();return}folder.name=real}
- const list=posts.filter(filterFn(folder));$("fName").textContent=folder.type==="month"?monthName(folder.key):folder.name;$("fCount").textContent=list.length+(list.length===1?" post":" posts");
+ const list=posts.filter(filterFn(folder));$("fName").textContent=folder.type==="month"?monthName(folder.key):folder.name;$("folderV").classList.toggle("arch",folder.type==="archive");$("fCount").textContent=list.length+(list.length===1?" post":" posts");
  $("fMenu").hidden=folder.type!=="cat";tiles($("fgrid"),list,folder)}
-$("fBack").onclick=()=>{folder=null;showSection();scrollTo(0,colY)};
-function render(){sortPosts();$("count").textContent=posts.length+(posts.length===1?" moment":" moments");
- tiles($("grid"),posts,null);renderCollections();renderFolder();showSection();
+$("fBack").onclick=()=>{const wasArch=folder&&folder.type==="archive";folder=null;showSection();scrollTo(0,wasArch?0:colY)};
+function render(){sortPosts();const L=live();$("count").textContent=L.length+(L.length===1?" moment":" moments");$("aHint").hidden=archOK||VIEWER;
+ tiles($("grid"),L,null);renderCollections();renderFolder();showSection();
  if(!$("feedV").hidden){const l=feedList();if(!l.length)closeFeed();else buildFeed()}}
 /* category picker */
 function catPicker(el,sel){el.innerHTML="";el.hidden=!catsOK;if(!catsOK)return;
@@ -216,7 +250,7 @@ function buildFeed(){const f=$("feed");f.innerHTML="";$("fTitle").textContent=fe
  a.innerHTML='<div class="phead"><time></time>'+(VIEWER?"":'<button type="button" class="icon pm" aria-label="Post options">⋯</button>')+'</div><p class="pcap"></p>';
  a.querySelector("time").textContent=fmt(p.created_at);a.querySelector("time").dateTime=p.created_at;
  a.querySelector(".phead").after(carousel(p,p.caption));const c=a.querySelector(".pcap");c.textContent=p.caption||"";c.hidden=!p.caption;
- if(!VIEWER)a.querySelector(".pm").onclick=()=>{cur=p;$("postD").showModal()};f.appendChild(a)}}
+ if(!VIEWER)a.querySelector(".pm").onclick=()=>{cur=p;$("pmArch").hidden=!archOK;$("pmArch").textContent=isArch(p)?"Unarchive":"Archive";$("postD").showModal()};f.appendChild(a)}}
 function openFeed(id,filter){gridY=scrollY;feedFilter=filter?{...filter}:null;buildFeed();$("feedV").hidden=false;document.body.classList.add("lock");
  const el=$("feed").querySelector('[data-id="'+CSS.escape(id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:0;
  if(!feedPushed){history.pushState({feed:true},"");feedPushed=true}}
@@ -266,7 +300,7 @@ function drawThumbs(){const t=$("thumbs");t.innerHTML="";pending.forEach((p,i)=>
  $("drop").textContent=pending.length?(pending.length+"/8 photos — tap or drop to add more"):"Click or drop up to 8 photos here";$("drop").classList.toggle("full",pending.length>=MAX);
  $("save").disabled=!pending.length}
 function move(a,b){if(b<0||b>=pending.length)return;const[x]=pending.splice(a,1);pending.splice(b,0,x);drawThumbs()}
-$("add").onclick=()=>{pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newCap").value="";const n=new Date();$("newDate").value=toDate(n);$("newDate").max=toDate(n);$("newTime").value=toTime(n);newSel=folder&&folder.type==="cat"?[folder.name]:[];catPicker($("newCats"),newSel);note("");drawThumbs();$("save").textContent="Post";$("newD").showModal()};
+$("add").onclick=()=>{pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newCap").value="";const n=new Date();$("newDate").value=toDate(n);$("newDate").max=toDate(n);newSel=folder&&folder.type==="cat"?[folder.name]:[];catPicker($("newCats"),newSel);note("");drawThumbs();$("save").textContent="Post";$("newD").showModal()};
 $("newCancel").onclick=()=>$("newD").close();
 $("drop").onclick=()=>{if(pending.length>=MAX)return note("A post can have at most 8 photos.");$("file").click()};$("file").onchange=e=>{pick(e.target.files);e.target.value=""};
 const dz=$("drop");["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("on")}));
@@ -276,23 +310,26 @@ $("newF").onsubmit=async e=>{e.preventDefault();if(!pending.length)return;if(pen
  const bad=pending.findIndex(p=>!p.blob||p.blob.size<MIN_BLOB);if(bad>=0){$("save").disabled=false;return note("Photo "+(bad+1)+" didn't process correctly — remove it and add it again.")}
  for(let i=0;i<pending.length;i++){$("save").textContent="Uploading "+(i+1)+"/"+pending.length+"…";const path=user.id+"/"+crypto.randomUUID()+".jpg";
   ({error}=await sb.storage.from("photos").upload(path,pending[i].blob,{contentType:"image/jpeg"}));if(error)break;done.push(path)}
- if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done,created_at:fromInputs($("newDate").value,$("newTime").value),...(catsOK?{categories:[...newSel]}:{})}));
+ if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done,created_at:fromDate($("newDate").value),...(catsOK?{categories:[...newSel]}:{})}));
  if(error){if(done.length)await sb.storage.from("photos").remove(done);
   alert("Upload failed: "+error.message+(/image_paths/.test(error.message)?"\n\nRun migrate-multi.sql in the Supabase SQL editor first.":""));$("save").disabled=false;$("save").textContent="Post";return}
  pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newD").close();setExtra(extraCats().filter(x=>!newSel.some(y=>same(x,y))));load()};
 
 /* ---------- edit / delete ---------- */
 $("pmClose").onclick=()=>$("postD").close();
-$("pmEdit").onclick=()=>{$("postD").close();const d=new Date(cur.created_at);$("eCap").value=cur.caption||"";$("eDate").value=toDate(d);$("eTime").value=hasTime(cur.created_at)?toTime(d):"";editSel=[...catsOf(cur)];catPicker($("eCats"),editSel);$("editD").showModal()};
+$("pmArch").onclick=async()=>{$("postD").close();const v=!isArch(cur);const{error}=await sb.from("posts").update({archived:v}).eq("id",cur.id);if(error)return alert(error.message);
+ cur.archived=v;const y=$("feedV").scrollTop;render();if(!$("feedV").hidden)$("feedV").scrollTop=Math.min(y,$("feedV").scrollHeight)};
+$("mArchive").onclick=()=>{$("menuD").close();openFolder({type:"archive",name:"Archive"})};
+$("pmEdit").onclick=()=>{$("postD").close();const d=new Date(cur.created_at);$("eCap").value=cur.caption||"";$("eDate").value=toDate(d);editSel=[...catsOf(cur)];catPicker($("eCats"),editSel);$("editD").showModal()};
 $("eCancel").onclick=()=>$("editD").close();
-$("editF").onsubmit=async e=>{e.preventDefault();const c=$("eCap").value.trim(),t=fromInputs($("eDate").value,$("eTime").value);$("eSave").disabled=true;
+$("editF").onsubmit=async e=>{e.preventDefault();const c=$("eCap").value.trim(),t=$("eDate").value===toDate(new Date(cur.created_at))?cur.created_at:fromDate($("eDate").value);$("eSave").disabled=true;
  const{error}=await sb.from("posts").update({caption:c,created_at:t,...(catsOK?{categories:[...editSel]}:{})}).eq("id",cur.id);$("eSave").disabled=false;if(error)return alert(error.message);
  cur.caption=c;cur.created_at=t;if(catsOK){cur.categories=[...editSel];setExtra(extraCats().filter(x=>!posts.some(p=>catsOf(p).some(y=>same(x,y)))))}$("editD").close();const y=$("feedV").scrollTop;render();if(!$("feedV").hidden){const el=$("feed").querySelector('[data-id="'+CSS.escape(cur.id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:y}};
 $("pmDel").onclick=async()=>{$("postD").close();if(!confirm("Delete this post permanently?"))return;const{error}=await sb.from("posts").delete().eq("id",cur.id);if(error)return alert(error.message);
  await sb.storage.from("photos").remove([...new Set([...pathsOf(cur),cur.image_path].filter(Boolean))]);posts=posts.filter(p=>p.id!==cur.id);const y=$("feedV").scrollTop;render();$("feedV").scrollTop=y;if(!posts.length)closeFeed()};
 
 /* ---------- share (owner) ---------- */
-let share={ok:false,on:false,token:null};
+var share={ok:false,on:false,token:null};
 const newToken=()=>{const b=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}; // 256-bit
 const shareUrl=t=>location.origin+location.pathname+"#share="+t;
 async function loadShare(){const{data,error}=await sb.from("profiles").select("share_enabled,share_token").eq("user_id",user.id).maybeSingle();
@@ -312,18 +349,21 @@ $("shNative").onclick=async()=>{try{await navigator.share({title:(profile.title|
 
 /* ---------- viewer (read-only, no login) ---------- */
 function notAvailable(){$("loginV").hidden=true;$("appV").hidden=true;$("naV").hidden=false}
-async function startViewer(){$("loginV").hidden=true;
+async function startViewer(){$("loginV").hidden=true;if(!sessionStorage.getItem("pj-mk-x"))$("mkB").hidden=false;
  const pr=await sb.rpc("get_shared_profile",{p_token:SHARE});const row=pr.data&&pr.data[0];
  if(pr.error||!row){if(pr.error)console.warn("share:",pr.error.message);return notAvailable()}
  profile={title:row.title||DEF_TITLE,bio:row.bio||""};profileOK=true;$("appV").hidden=false;drawProfile();$("count").textContent="Loading…";
  const{data,error}=await sb.rpc("get_shared_posts",{p_token:SHARE});if(error){console.warn("share:",error.message);return notAvailable()}
- posts=data||[];catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);render()}
+ posts=(data||[]).filter(p=>p.archived!==true);catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);render()}
 addEventListener("hashchange",()=>{const t=(location.hash.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||null;if(t!==SHARE)location.reload()});
 
+$("mkX").onclick=()=>{$("mkB").hidden=true;sessionStorage.setItem("pj-mk-x","1")};
+// leave viewer mode completely: full reload with the normal client on the sign-up screen
+$("mkGo").onclick=e=>{e.preventDefault();location.replace(location.pathname+"#signup");location.reload()};
 /* ---------- export ---------- */
 const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
 $("exp").onclick=async()=>{$("menuD").close();if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];
- try{for(const p of posts){const images=[];for(const k of pathsOf(p)){const{data,error}=await sb.storage.from("photos").download(k);if(error)throw error;images.push(await b64(data))}out.push({id:p.id,date:Date.parse(p.created_at),caption:p.caption,categories:catsOf(p),image:images[0],images})}
- const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:3,exported:Date.now(),profile,posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+ try{for(const p of posts){const images=[];for(const k of pathsOf(p)){const{data,error}=await sb.storage.from("photos").download(k);if(error)throw error;images.push(await b64(data))}out.push({id:p.id,date:Date.parse(p.created_at),caption:p.caption,archived:isArch(p),categories:catsOf(p),image:images[0],images})}
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:4,exported:Date.now(),profile,posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
  catch(e){alert("Export failed: "+e.message)}finally{$("exp").disabled=false}};
 </script></body></html>
