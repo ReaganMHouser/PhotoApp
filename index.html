@@ -20,27 +20,39 @@
  <p class="bio" id="pBio"></p>
  <p class="count" id="count"></p><p class="msg" id="pHint" hidden></p>
 </section>
-<div id="grid" class="grid"></div></main>
+<nav class="tabs" role="tablist"><button type="button" role="tab" class="tab on" id="tabAll" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>All</span></button><button type="button" role="tab" class="tab" id="tabCol" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Collections</span></button></nav>
+<div id="allV"><div id="grid" class="grid"></div></div>
+<div id="colV" hidden>
+ <h3 class="sec">By month</h3><div class="folders" id="monthF"></div>
+ <h3 class="sec">Categories</h3><p class="msg" id="catHint" hidden>Categories need a quick database update — run migrate-categories.sql in Supabase.</p><div class="folders" id="catF"></div>
+</div>
+<div id="folderV" hidden><div class="fhead"><button type="button" class="icon" id="fBack" aria-label="Back to collections">‹</button><h3 id="fName"></h3><button type="button" class="icon" id="fMenu" aria-label="Category options">⋯</button></div>
+ <p class="count" id="fCount"></p><div id="fgrid" class="grid"></div></div>
+</main>
 <button type="button" class="fab" id="add" aria-label="New post">+</button>
 </section>
 <section id="feedV" class="feedV" hidden aria-label="Posts">
  <div class="fbar"><button type="button" class="icon" id="back" aria-label="Back to grid">‹</button><span class="ftitle" id="fTitle">Posts</span></div>
  <div class="feed" id="feed"></div>
 </section>
+<dialog id="catD" class="sheet"><div class="sheetb">
+ <button type="button" id="cRen">Rename category</button><button type="button" id="cDel" class="danger">Delete category</button><button type="button" id="cClose">Cancel</button></div></dialog>
 <dialog id="menuD" class="sheet"><div class="sheetb">
  <button type="button" id="mProfile">Edit profile</button><button type="button" id="exp">Export backup</button>
  <button type="button" id="out" class="danger">Sign out</button><button type="button" id="mClose">Cancel</button></div></dialog>
 <dialog id="postD" class="sheet"><div class="sheetb">
- <button type="button" id="pmEdit">Edit caption &amp; date</button><button type="button" id="pmDel" class="danger">Delete post</button><button type="button" id="pmClose">Cancel</button></div></dialog>
+ <button type="button" id="pmEdit">Edit post</button><button type="button" id="pmDel" class="danger">Delete post</button><button type="button" id="pmClose">Cancel</button></div></dialog>
 <dialog id="newD"><form class="form" id="newF"><h2>New post</h2>
 <div class="drop" id="drop">Click or drop up to 8 photos here</div><input id="file" type="file" accept="image/*" multiple hidden>
 <div class="thumbs" id="thumbs"></div><div class="msg" id="nmsg"></div>
 <textarea id="newCap" placeholder="Write a caption…"></textarea>
 <div class="when"><label>Date<input type="date" id="newDate" required></label><label>Time <span class="opt">(optional)</span><input type="time" id="newTime"></label></div>
+<div class="catpick" id="newCats"></div>
 <div class="row"><button type="button" id="newCancel">Cancel</button><button class="primary" id="save" type="submit" disabled>Post</button></div></form></dialog>
 <dialog id="editD"><form class="form" id="editF"><h2>Edit post</h2>
 <textarea id="eCap" placeholder="Caption"></textarea>
 <div class="when"><label>Date<input type="date" id="eDate" required></label><label>Time <span class="opt">(optional)</span><input type="time" id="eTime"></label></div>
+<div class="catpick" id="eCats"></div>
 <div class="row"><button type="button" id="eCancel">Cancel</button><button class="primary" type="submit" id="eSave">Save</button></div></form></dialog>
 <dialog id="profD"><form class="form" id="profF"><h2>Edit profile</h2>
 <label class="fl">Title<input type="text" id="prTitle" maxlength="60" placeholder="PHOTO JOURNAL"></label>
@@ -55,7 +67,10 @@ if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWor
 const configured=!/YOUR-/.test(window.SUPABASE_URL+window.SUPABASE_ANON_KEY);
 const sb=configured?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}}):null;
 const MAX=8,DEF_TITLE="PHOTO JOURNAL";
-let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true;
+let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true,catsOK=true,tab="all",folder=null,feedFilter=null;
+const catsOf=p=>Array.isArray(p.categories)?p.categories:[];
+const normCat=s=>s.replace(/\s+/g," ").trim().slice(0,40);
+const same=(a,b)=>a.toLowerCase()===b.toLowerCase();
 const pathsOf=p=>(Array.isArray(p.image_paths)&&p.image_paths.length)?p.image_paths:(p.image_path?[p.image_path]:[]);
 const fmt=t=>{const d=new Date(t);return d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})+(hasTime(t)?" · "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}):"")};
 const pad=n=>String(n).padStart(2,"0");
@@ -73,7 +88,7 @@ $("magic").onclick=async()=>{if(!$("em").value)return $("lmsg").textContent="Ent
 /* ---------- menu ---------- */
 $("menuBtn").onclick=()=>$("menuD").showModal();$("mClose").onclick=()=>$("menuD").close();
 document.querySelectorAll("dialog.sheet").forEach(d=>d.addEventListener("click",e=>{if(e.target===d)d.close()}));
-$("out").onclick=async()=>{$("menuD").close();await sb.auth.signOut();user=null;posts=[];$("grid").innerHTML="";view(false)};
+$("out").onclick=async()=>{$("menuD").close();await sb.auth.signOut();user=null;posts=[];$("grid").innerHTML="";setTab("all");view(false)};
 
 /* ---------- profile ---------- */
 function drawProfile(){$("pTitle").textContent=(profile.title||DEF_TITLE).toUpperCase();$("pBio").textContent=profile.bio||"";$("pBio").hidden=!profile.bio;
@@ -92,14 +107,64 @@ $("profF").onsubmit=async e=>{e.preventDefault();const p={title:($("prTitle").va
 async function load(){$("count").textContent="Loading…";
  const{data,error}=await sb.from("posts").select("*").order("created_at",{ascending:false});
  if(error){$("count").textContent="Error: "+error.message;return}
+ {const pr=await sb.from("posts").select("categories").limit(1);catsOK=!pr.error;if(pr.error)console.warn("categories:",pr.error.message)}
  posts=data;const all=posts.flatMap(pathsOf);if(all.length){const{data:s}=await sb.storage.from("photos").createSignedUrls(all,3600);const m={};(s||[]).forEach(x=>m[x.path]=x.signedUrl);posts.forEach(p=>{p.urls=pathsOf(p).map(k=>m[k]||"");p.url=p.urls[0]})}
  render()}
 function sortPosts(){posts.sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))}
-function render(){sortPosts();const g=$("grid");g.innerHTML="";
- $("count").textContent=posts.length+(posts.length===1?" moment":" moments");
- if(!posts.length){g.style.display="block";g.innerHTML='<div class="empty">Your journal is empty.<br>Tap <b>+</b> to add your first photo.</div>';return}
- g.style.display="";posts.forEach((p,k)=>{const b=document.createElement("button"),i=document.createElement("img");i.src=p.url||"";i.alt=p.caption||"Photo";i.loading="lazy";b.appendChild(i);if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>openFeed(p.id);g.appendChild(b)});
- if(!$("feedV").hidden)buildFeed()}
+function tiles(g,list,filter){g.innerHTML="";
+ if(!list.length){g.style.display="block";g.innerHTML='<div class="empty">'+(filter?'No posts here yet.':'Your journal is empty.<br>Tap <b>+</b> to add your first photo.')+'</div>';return}
+ g.style.display="";list.forEach(p=>{const b=document.createElement("button"),i=document.createElement("img");i.src=p.url||"";i.alt=p.caption||"Photo";i.loading="lazy";b.appendChild(i);if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>openFeed(p.id,filter);g.appendChild(b)})}
+const monthKey=p=>{const d=new Date(p.created_at);return d.getFullYear()+"-"+pad(d.getMonth()+1)};
+const monthName=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"})};
+function filterFn(f){if(!f)return()=>true;return f.type==="month"?p=>monthKey(p)===f.key:p=>catsOf(p).some(c=>same(c,f.name))}
+function allCats(){const m=new Map();const add=c=>{const k=c.toLowerCase();if(!m.has(k))m.set(k,c)};posts.forEach(p=>catsOf(p).forEach(add));extraCats().forEach(add);return[...m.values()].sort((a,b)=>a.localeCompare(b))}
+// categories with no posts yet live only on this device until a post uses them
+const extraCats=()=>{try{return JSON.parse(localStorage.getItem("pj-cats")||"[]")}catch{return[]}};
+const setExtra=l=>localStorage.setItem("pj-cats",JSON.stringify(l));
+function addExtra(c){const l=extraCats();if(!l.some(x=>same(x,c)))l.push(c);setExtra(l)}
+function card(name,list,onclick,cls){const b=document.createElement("button");b.type="button";b.className="fcard"+(cls?" "+cls:"");
+ b.innerHTML='<div class="fcov"></div><div class="fn"></div><div class="fc"></div>';b.querySelector(".fn").textContent=name;
+ if(list){b.querySelector(".fc").textContent=list.length+(list.length===1?" post":" posts");if(list[0]&&list[0].url){const i=new Image();i.src=list[0].url;i.alt="";i.loading="lazy";b.querySelector(".fcov").appendChild(i)}}
+ b.onclick=onclick;return b}
+function renderCollections(){const mf=$("monthF"),cf=$("catF");mf.innerHTML="";cf.innerHTML="";
+ const months=[...new Set(posts.map(monthKey))];
+ months.forEach(k=>{const f={type:"month",key:k,name:monthName(k)};mf.appendChild(card(f.name,posts.filter(filterFn(f)),()=>openFolder(f)))});
+ if(!months.length)mf.innerHTML='<p class="msg">Months appear here once you post.</p>';
+ $("catHint").hidden=catsOK;if(!catsOK)return;
+ allCats().forEach(c=>{const f={type:"cat",name:c};cf.appendChild(card(c,posts.filter(filterFn(f)),()=>openFolder(f)))});
+ const n=card("New category",null,()=>{const v=prompt("Name your category (e.g. a person, place, or trip):");if(!v||!normCat(v))return;const c=normCat(v);if(!allCats().some(x=>same(x,c)))addExtra(c);renderCollections()},"fnew");
+ n.querySelector(".fcov").textContent="+";n.querySelector(".fc").textContent="People, places, trips…";cf.appendChild(n)}
+function setTab(t){tab=t;folder=null;$("tabAll").classList.toggle("on",t==="all");$("tabCol").classList.toggle("on",t==="col");$("tabAll").setAttribute("aria-selected",t==="all");$("tabCol").setAttribute("aria-selected",t==="col");showSection()}
+function showSection(){$("allV").hidden=!(tab==="all");$("colV").hidden=!(tab==="col"&&!folder);$("folderV").hidden=!folder}
+$("tabAll").onclick=()=>setTab("all");$("tabCol").onclick=()=>setTab("col");
+let colY=0;
+function openFolder(f){colY=scrollY;folder=f;renderFolder();showSection();$("folderV").scrollIntoView({block:"start"})}
+function renderFolder(){if(!folder)return;if(folder.type==="cat"){const real=allCats().find(c=>same(c,folder.name));if(!real){folder=null;showSection();return}folder.name=real}
+ const list=posts.filter(filterFn(folder));$("fName").textContent=folder.type==="month"?monthName(folder.key):folder.name;$("fCount").textContent=list.length+(list.length===1?" post":" posts");
+ $("fMenu").hidden=folder.type!=="cat";tiles($("fgrid"),list,folder)}
+$("fBack").onclick=()=>{folder=null;showSection();scrollTo(0,colY)};
+function render(){sortPosts();$("count").textContent=posts.length+(posts.length===1?" moment":" moments");
+ tiles($("grid"),posts,null);renderCollections();renderFolder();showSection();
+ if(!$("feedV").hidden){const l=feedList();if(!l.length)closeFeed();else buildFeed()}}
+/* category picker */
+function catPicker(el,sel){el.innerHTML="";el.hidden=!catsOK;if(!catsOK)return;
+ el.innerHTML='<div class="cplabel">Categories</div><div class="chips"></div><div class="cpadd"><input type="text" maxlength="40" placeholder="Add a category…" enterkeyhint="done"><button type="button">Add</button></div>';
+ const chips=el.querySelector(".chips"),inp=el.querySelector("input");
+ const draw=()=>{chips.innerHTML="";const names=allCats();sel.forEach(s=>{if(!names.some(n=>same(n,s)))names.push(s)});
+  if(!names.length)chips.innerHTML='<span class="msg">No categories yet — type one below.</span>';
+  names.forEach(n=>{const b=document.createElement("button");b.type="button";b.className="chip"+(sel.some(s=>same(s,n))?" on":"");b.textContent=n;b.setAttribute("aria-pressed",b.classList.contains("on"));
+   b.onclick=()=>{const i=sel.findIndex(s=>same(s,n));if(i>=0)sel.splice(i,1);else sel.push(n);draw()};chips.appendChild(b)})};
+ const add=()=>{const c=normCat(inp.value);inp.value="";if(!c)return;const ex=allCats().find(x=>same(x,c))||sel.find(x=>same(x,c))||c;if(!sel.some(s=>same(s,ex)))sel.push(ex);draw()};
+ el.querySelector(".cpadd button").onclick=add;inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();add()}});draw()}
+let newSel=[],editSel=[];
+/* rename / delete category */
+$("fMenu").onclick=()=>$("catD").showModal();$("cClose").onclick=()=>$("catD").close();
+async function rewriteCat(fn){const old=folder.name,hit=posts.filter(p=>catsOf(p).some(c=>same(c,old)));
+ for(const p of hit){const next=[];fn(catsOf(p)).forEach(c=>{if(!next.some(x=>same(x,c)))next.push(c)});const{error}=await sb.from("posts").update({categories:next}).eq("id",p.id);if(error){alert(error.message);break}p.categories=next}}
+$("cRen").onclick=async()=>{$("catD").close();const old=folder.name;const v=prompt("Rename category",old);const c=v&&normCat(v);if(!c||c===old)return;
+ await rewriteCat(l=>l.map(x=>same(x,old)?c:x));setExtra(extraCats().filter(x=>!same(x,old)));if(!posts.some(p=>catsOf(p).some(x=>same(x,c))))addExtra(c);folder={type:"cat",name:c};render()};
+$("cDel").onclick=async()=>{$("catD").close();const old=folder.name;if(!confirm('Delete the category "'+old+'"? Your posts stay; they just lose this label.'))return;
+ await rewriteCat(l=>l.filter(x=>!same(x,old)));setExtra(extraCats().filter(x=>!same(x,old)));folder=null;render()};
 
 /* ---------- carousel (reusable) ---------- */
 function carousel(urls,alt){const u=urls&&urls.length?urls:[""];const c=document.createElement("div");c.className="car";
@@ -114,17 +179,18 @@ function carousel(urls,alt){const u=urls&&urls.length?urls:[""];const c=document
  c.tabIndex=-1;c.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")go(-1);if(e.key==="ArrowRight")go(1)});c.go=go;upd();return c}
 
 /* ---------- feed ---------- */
-let gridY=0;
-function buildFeed(){const f=$("feed");f.innerHTML="";for(const p of posts){const a=document.createElement("article");a.className="post";a.dataset.id=p.id;
+let gridY=0,feedPushed=false,ignorePop=0;
+const feedList=()=>posts.filter(filterFn(feedFilter));
+function buildFeed(){const f=$("feed");f.innerHTML="";$("fTitle").textContent=feedFilter?(feedFilter.type==="month"?monthName(feedFilter.key):feedFilter.name):"Posts";for(const p of feedList()){const a=document.createElement("article");a.className="post";a.dataset.id=p.id;
  a.innerHTML='<div class="phead"><time></time><button type="button" class="icon pm" aria-label="Post options">⋯</button></div><p class="pcap"></p>';
  a.querySelector("time").textContent=fmt(p.created_at);a.querySelector("time").dateTime=p.created_at;
  a.querySelector(".phead").after(carousel(p.urls||[p.url],p.caption));const c=a.querySelector(".pcap");c.textContent=p.caption||"";c.hidden=!p.caption;
  a.querySelector(".pm").onclick=()=>{cur=p;$("postD").showModal()};f.appendChild(a)}}
-function openFeed(id){gridY=scrollY;buildFeed();$("feedV").hidden=false;document.body.classList.add("lock");
+function openFeed(id,filter){gridY=scrollY;feedFilter=filter?{...filter}:null;buildFeed();$("feedV").hidden=false;document.body.classList.add("lock");
  const el=$("feed").querySelector('[data-id="'+CSS.escape(id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:0;
- if(history.state?.feed!==true)history.pushState({feed:true},"")}
-function closeFeed(silent){if($("feedV").hidden)return;$("feedV").hidden=true;document.body.classList.remove("lock");scrollTo(0,gridY);if(!silent&&history.state?.feed)history.back()}
-$("back").onclick=()=>closeFeed();addEventListener("popstate",()=>closeFeed(true));
+ if(!feedPushed){history.pushState({feed:true},"");feedPushed=true}}
+function closeFeed(silent){if($("feedV").hidden)return;$("feedV").hidden=true;document.body.classList.remove("lock");scrollTo(0,gridY);if(!silent&&feedPushed){feedPushed=false;ignorePop++;history.back()}}
+$("back").onclick=()=>closeFeed();addEventListener("popstate",()=>{if(ignorePop){ignorePop--;return}feedPushed=false;closeFeed(true)});
 addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("feedV").hidden&&!document.querySelector("dialog[open]"))closeFeed();
  if((e.key==="ArrowLeft"||e.key==="ArrowRight")&&!$("feedV").hidden&&!document.querySelector("dialog[open]")){const ps=[...$("feed").children],top=$("feedV").scrollTop+80;const a=ps.find(x=>x.offsetTop+x.offsetHeight>top);a&&a.querySelector(".car").go(e.key==="ArrowLeft"?-1:1)}});
 
@@ -146,7 +212,7 @@ function drawThumbs(){const t=$("thumbs");t.innerHTML="";pending.forEach((p,i)=>
  $("drop").textContent=pending.length?(pending.length+"/8 photos — tap or drop to add more"):"Click or drop up to 8 photos here";$("drop").classList.toggle("full",pending.length>=MAX);
  $("save").disabled=!pending.length}
 function move(a,b){if(b<0||b>=pending.length)return;const[x]=pending.splice(a,1);pending.splice(b,0,x);drawThumbs()}
-$("add").onclick=()=>{pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newCap").value="";const n=new Date();$("newDate").value=toDate(n);$("newDate").max=toDate(n);$("newTime").value=toTime(n);note("");drawThumbs();$("save").textContent="Post";$("newD").showModal()};
+$("add").onclick=()=>{pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newCap").value="";const n=new Date();$("newDate").value=toDate(n);$("newDate").max=toDate(n);$("newTime").value=toTime(n);newSel=folder&&folder.type==="cat"?[folder.name]:[];catPicker($("newCats"),newSel);note("");drawThumbs();$("save").textContent="Post";$("newD").showModal()};
 $("newCancel").onclick=()=>$("newD").close();
 $("drop").onclick=()=>{if(pending.length>=MAX)return note("A post can have at most 8 photos.");$("file").click()};$("file").onchange=e=>{pick(e.target.files);e.target.value=""};
 const dz=$("drop");["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("on")}));
@@ -155,25 +221,25 @@ $("newF").onsubmit=async e=>{e.preventDefault();if(!pending.length)return;if(pen
  $("save").disabled=true;const done=[];let error=null;
  for(let i=0;i<pending.length;i++){$("save").textContent="Uploading "+(i+1)+"/"+pending.length+"…";const path=user.id+"/"+crypto.randomUUID()+".jpg";
   ({error}=await sb.storage.from("photos").upload(path,pending[i].blob,{contentType:"image/jpeg"}));if(error)break;done.push(path)}
- if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done,created_at:fromInputs($("newDate").value,$("newTime").value)}));
+ if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done,created_at:fromInputs($("newDate").value,$("newTime").value),...(catsOK?{categories:[...newSel]}:{})}));
  if(error){if(done.length)await sb.storage.from("photos").remove(done);
   alert("Upload failed: "+error.message+(/image_paths/.test(error.message)?"\n\nRun migrate-multi.sql in the Supabase SQL editor first.":""));$("save").disabled=false;$("save").textContent="Post";return}
- pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newD").close();load()};
+ pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newD").close();setExtra(extraCats().filter(x=>!newSel.some(y=>same(x,y))));load()};
 
 /* ---------- edit / delete ---------- */
 $("pmClose").onclick=()=>$("postD").close();
-$("pmEdit").onclick=()=>{$("postD").close();const d=new Date(cur.created_at);$("eCap").value=cur.caption||"";$("eDate").value=toDate(d);$("eTime").value=hasTime(cur.created_at)?toTime(d):"";$("editD").showModal()};
+$("pmEdit").onclick=()=>{$("postD").close();const d=new Date(cur.created_at);$("eCap").value=cur.caption||"";$("eDate").value=toDate(d);$("eTime").value=hasTime(cur.created_at)?toTime(d):"";editSel=[...catsOf(cur)];catPicker($("eCats"),editSel);$("editD").showModal()};
 $("eCancel").onclick=()=>$("editD").close();
 $("editF").onsubmit=async e=>{e.preventDefault();const c=$("eCap").value.trim(),t=fromInputs($("eDate").value,$("eTime").value);$("eSave").disabled=true;
- const{error}=await sb.from("posts").update({caption:c,created_at:t}).eq("id",cur.id);$("eSave").disabled=false;if(error)return alert(error.message);
- cur.caption=c;cur.created_at=t;$("editD").close();const y=$("feedV").scrollTop;render();if(!$("feedV").hidden){const el=$("feed").querySelector('[data-id="'+CSS.escape(cur.id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:y}};
+ const{error}=await sb.from("posts").update({caption:c,created_at:t,...(catsOK?{categories:[...editSel]}:{})}).eq("id",cur.id);$("eSave").disabled=false;if(error)return alert(error.message);
+ cur.caption=c;cur.created_at=t;if(catsOK){cur.categories=[...editSel];setExtra(extraCats().filter(x=>!posts.some(p=>catsOf(p).some(y=>same(x,y)))))}$("editD").close();const y=$("feedV").scrollTop;render();if(!$("feedV").hidden){const el=$("feed").querySelector('[data-id="'+CSS.escape(cur.id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:y}};
 $("pmDel").onclick=async()=>{$("postD").close();if(!confirm("Delete this post permanently?"))return;const{error}=await sb.from("posts").delete().eq("id",cur.id);if(error)return alert(error.message);
  await sb.storage.from("photos").remove([...new Set([...pathsOf(cur),cur.image_path].filter(Boolean))]);posts=posts.filter(p=>p.id!==cur.id);const y=$("feedV").scrollTop;render();$("feedV").scrollTop=y;if(!posts.length)closeFeed()};
 
 /* ---------- export ---------- */
 const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
 $("exp").onclick=async()=>{$("menuD").close();if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];
- try{for(const p of posts){const images=[];for(const k of pathsOf(p)){const{data,error}=await sb.storage.from("photos").download(k);if(error)throw error;images.push(await b64(data))}out.push({id:p.id,date:Date.parse(p.created_at),caption:p.caption,image:images[0],images})}
- const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:2,exported:Date.now(),profile,posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+ try{for(const p of posts){const images=[];for(const k of pathsOf(p)){const{data,error}=await sb.storage.from("photos").download(k);if(error)throw error;images.push(await b64(data))}out.push({id:p.id,date:Date.parse(p.created_at),caption:p.caption,categories:catsOf(p),image:images[0],images})}
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:3,exported:Date.now(),profile,posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
  catch(e){alert("Export failed: "+e.message)}finally{$("exp").disabled=false}};
 </script></body></html>
