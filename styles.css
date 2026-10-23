@@ -1,4 +1,8 @@
-:root{--bg:#fffffe;--card:#fff;--ink:#3a2f28;--muted:#6F584B;--accent:#003459;--line:#ece3d8}
+:root{--bg:#fffffe;--card:#fff;--ink:#3a2f28;--muted:#6F584B;--accent:#003459;--line:#ece3d8;
+  /* multi-photo carousel & thumbnails */
+  --photo-bg:#1e1915;--overlay-bg:rgba(20,15,10,.55);--overlay-ink:#fff;--dot:rgba(255,255,255,.5);--dot-on:#fff;
+  --car-h:min(80vh,720px);--nav-size:34px;--dot-size:6px;--dot-gap:5px;--badge-size:20px;
+  --thumb-size:84px;--thumb-gap:8px;--radius-sm:8px;--radius-pill:999px;--space-xs:6px;--space-sm:10px;--font-xs:12px}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
 header{position:sticky;top:0;z-index:5;background:rgba(250,246,240,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .bar{max-width:960px;margin:auto;display:flex;align-items:center;gap:8px;padding:12px 16px}
@@ -30,3 +34,32 @@ h2{font-family:Georgia,serif;font-weight:normal;margin:0}
 input[type=email],input[type=password]{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
 .msg{color:var(--muted);font-size:13px;min-height:1em}.bar{padding-top:max(12px,env(safe-area-inset-top))}
 body{-webkit-tap-highlight-color:transparent}[hidden]{display:none!important}
+
+/* --- multi-photo --- */
+.grid button{position:relative}
+.multi{position:absolute;top:var(--space-xs);right:var(--space-xs);width:var(--badge-size);height:var(--badge-size);pointer-events:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.multi svg{width:100%;height:100%;fill:none;stroke:var(--overlay-ink);stroke-width:2}
+.multi svg rect{fill:var(--overlay-ink)}
+.car{position:relative;flex:1 1 380px;min-width:0;width:100%;background:var(--photo-bg)}
+.track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;height:var(--car-h)}
+.track::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:center;scroll-snap-stop:always;display:flex;align-items:center;justify-content:center}
+.slide img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.nav{position:absolute;top:50%;transform:translateY(-50%);width:var(--nav-size);height:var(--nav-size);padding:0;border:0;border-radius:var(--radius-pill);background:var(--overlay-bg);color:var(--overlay-ink);font-size:22px;line-height:1}
+.nav:disabled{opacity:0;pointer-events:none}.prev{left:var(--space-sm)}.next{right:var(--space-sm)}
+.counter{position:absolute;top:var(--space-sm);right:var(--space-sm);background:var(--overlay-bg);color:var(--overlay-ink);font-size:var(--font-xs);padding:2px var(--space-sm);border-radius:var(--radius-pill)}
+.dots{position:absolute;bottom:var(--space-sm);left:0;right:0;display:flex;justify-content:center;gap:var(--dot-gap);pointer-events:none}
+.dots span{width:var(--dot-size);height:var(--dot-size);border-radius:50%;background:var(--dot);transition:background .2s,transform .2s}
+.dots span.on{background:var(--dot-on);transform:scale(1.25)}
+@media(hover:none){.nav{display:none}}
+.thumbs{display:flex;flex-wrap:wrap;gap:var(--thumb-gap)}.thumbs:empty{display:none}
+.thumb{position:relative;width:var(--thumb-size);height:var(--thumb-size);border-radius:var(--radius-sm);overflow:hidden;background:var(--line);cursor:grab}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .n{position:absolute;left:4px;top:4px;background:var(--overlay-bg);color:var(--overlay-ink);font-size:var(--font-xs);padding:0 var(--space-xs);border-radius:var(--radius-pill)}
+.thumb .rm{position:absolute;right:3px;top:3px;width:22px;height:22px;padding:0;border:0;background:var(--overlay-bg);color:var(--overlay-ink);line-height:1}
+.thumb .mv{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between}
+.thumb .mv button{padding:0 var(--space-xs);border:0;border-radius:0;background:var(--overlay-bg);color:var(--overlay-ink)}
+.thumb .mv button:disabled{visibility:hidden}
+.drop.full{opacity:.6}
+.drop{padding:var(--space-sm) 30px}
+.view .slide img{flex:none;width:auto;min-width:0;max-height:100%;background:none}
