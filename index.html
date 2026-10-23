@@ -37,8 +37,17 @@
 </section>
 <dialog id="catD" class="sheet"><div class="sheetb">
  <button type="button" id="cRen">Rename category</button><button type="button" id="cDel" class="danger">Delete category</button><button type="button" id="cClose">Cancel</button></div></dialog>
+<dialog id="shareD"><div class="form"><h2>Share my page</h2>
+<label class="switch"><input type="checkbox" id="shOn"><span class="track-sw"></span><span id="shState">Sharing is off</span></label>
+<p class="msg" id="shInfo">Anyone with the link can view your posts, profile and collections — read-only. They can't post, edit or delete.</p>
+<div id="shLinkBox" hidden><div class="shlink"><input type="text" id="shLink" readonly aria-label="Share link"></div>
+<div class="row shbtns"><button type="button" id="shCopy">Copy link</button><button type="button" id="shNative">Share…</button></div>
+<button type="button" class="danger shreset" id="shReset">Reset link</button><p class="msg">Reset makes a new link; the old one stops working.</p></div>
+<p class="msg" id="shMsg"></p>
+<div class="row"><button type="button" id="shClose">Done</button></div></div></dialog>
+<section id="naV" hidden><div class="login na"><h1>Not available</h1><p>This page isn't being shared right now, or the link has changed. Ask the owner for a new link.</p></div></section>
 <dialog id="menuD" class="sheet"><div class="sheetb">
- <button type="button" id="mProfile">Edit profile</button><button type="button" id="exp">Export backup</button>
+ <button type="button" id="mProfile">Edit profile</button><button type="button" id="mShare">Share my page</button><button type="button" id="exp">Export backup</button>
  <button type="button" id="out" class="danger">Sign out</button><button type="button" id="mClose">Cancel</button></div></dialog>
 <dialog id="postD" class="sheet"><div class="sheetb">
  <button type="button" id="pmEdit">Edit post</button><button type="button" id="pmDel" class="danger">Delete post</button><button type="button" id="pmClose">Cancel</button></div></dialog>
@@ -65,13 +74,17 @@
 const $=id=>document.getElementById(id);
 if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 const configured=!/YOUR-/.test(window.SUPABASE_URL+window.SUPABASE_ANON_KEY);
-const sb=configured?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}}):null;
+const SHARE_RAW=/(?:^#|&)share=/.test(location.hash),SHARE=(location.hash.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||(SHARE_RAW?"invalid":null),VIEWER=!!SHARE;
+// viewer: a separate anonymous client that never reads/stores the owner's login
+const sb=configured?(VIEWER?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"pj-viewer"}})
+ :supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}})):null;
+if(VIEWER)document.documentElement.classList.add("viewer");
 const MAX=8,DEF_TITLE="PHOTO JOURNAL";
 let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true,catsOK=true,tab="all",folder=null,feedFilter=null;
 const catsOf=p=>Array.isArray(p.categories)?p.categories:[];
 const normCat=s=>s.replace(/\s+/g," ").trim().slice(0,40);
 const same=(a,b)=>a.toLowerCase()===b.toLowerCase();
-const pathsOf=p=>(Array.isArray(p.image_paths)&&p.image_paths.length)?p.image_paths:(p.image_path?[p.image_path]:[]);
+const pathsOf=p=>{const a=Array.isArray(p.image_paths)?p.image_paths.filter(Boolean):[];return a.length?a:(p.image_path?[p.image_path]:[])};
 const fmt=t=>{const d=new Date(t);return d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})+(hasTime(t)?" · "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}):"")};
 const pad=n=>String(n).padStart(2,"0");
 const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),toTime=d=>pad(d.getHours())+":"+pad(d.getMinutes());
@@ -79,8 +92,9 @@ const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),toT
 const fromInputs=(d,t)=>{const[y,m,da]=d.split("-").map(Number);if(!t)return new Date(y,m-1,da,12,0,1).toISOString();const[h,mi]=t.split(":").map(Number);return new Date(y,m-1,da,h,mi,0).toISOString()};
 const hasTime=t=>{const d=new Date(t);return !(d.getHours()===12&&d.getMinutes()===0&&d.getSeconds()===1)};
 function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn;if(!signedIn)closeFeed(true)}
-async function onSession(s){user=s&&s.user;view(!!user);if(user){loadProfile();load()}}
+async function onSession(s){user=s&&s.user;view(!!user);if(user){loadProfile();load();loadShare()}}
 if(!sb){view(false);$("lmsg").textContent="Not configured yet: add your Supabase URL and anon key to config.js.";$("loginF").querySelectorAll("button,input").forEach(e=>e.disabled=true)}
+else if(VIEWER){startViewer()}
 else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})}
 $("loginF").onsubmit=async e=>{e.preventDefault();$("lmsg").textContent="Signing in…";const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});$("lmsg").textContent=error?error.message:""};
 $("magic").onclick=async()=>{if(!$("em").value)return $("lmsg").textContent="Enter your email first.";const{error}=await sb.auth.signInWithOtp({email:$("em").value,options:{shouldCreateUser:false,emailRedirectTo:location.href.split("#")[0]}});$("lmsg").textContent=error?error.message:"Check your email for the link."};
@@ -96,7 +110,7 @@ function drawProfile(){$("pTitle").textContent=(profile.title||DEF_TITLE).toUppe
 async function loadProfile(){drawProfile();const{data,error}=await sb.from("profiles").select("title,bio").eq("user_id",user.id).maybeSingle();
  if(error){profileOK=false;console.warn("profiles:",error.message)}else{profileOK=true;if(data)profile={title:data.title||DEF_TITLE,bio:data.bio||""}}drawProfile()}
 $("mProfile").onclick=()=>{$("menuD").close();$("prTitle").value=profile.title||DEF_TITLE;$("prBio").value=profile.bio||"";$("prMsg").textContent=profileOK?"":"Profile table missing: changes will only show until you reload. Run migrate-profile.sql.";$("profD").showModal()};
-$("pTitle").onclick=$("mProfile").onclick;
+if(!VIEWER)$("pTitle").onclick=$("mProfile").onclick;
 $("prCancel").onclick=()=>$("profD").close();
 $("profF").onsubmit=async e=>{e.preventDefault();const p={title:($("prTitle").value.trim()||DEF_TITLE).toUpperCase(),bio:$("prBio").value.trim()};
  $("prSave").disabled=true;const{error}=await sb.from("profiles").upsert({user_id:user.id,...p,updated_at:new Date().toISOString()},{onConflict:"user_id"});$("prSave").disabled=false;
@@ -108,12 +122,29 @@ async function load(){$("count").textContent="Loading…";
  const{data,error}=await sb.from("posts").select("*").order("created_at",{ascending:false});
  if(error){$("count").textContent="Error: "+error.message;return}
  {const pr=await sb.from("posts").select("categories").limit(1);catsOK=!pr.error;if(pr.error)console.warn("categories:",pr.error.message)}
- posts=data;const all=posts.flatMap(pathsOf);if(all.length){const{data:s}=await sb.storage.from("photos").createSignedUrls(all,3600);const m={};(s||[]).forEach(x=>m[x.path]=x.signedUrl);posts.forEach(p=>{p.urls=pathsOf(p).map(k=>m[k]||"");p.url=p.urls[0]})}
+ posts=data;await signPosts(posts);
  render()}
+/* ---------- signed URLs: per-item errors, batching, refresh before expiry ---------- */
+const SIGN_TTL=VIEWER?600:3600,SIGN_REFRESH=VIEWER?8*60*1000:45*60*1000;let signedAt=0;
+async function signPaths(paths){const m={};for(let i=0;i<paths.length;i+=100){const chunk=paths.slice(i,i+100);
+  const{data,error}=await sb.storage.from("photos").createSignedUrls(chunk,SIGN_TTL);if(error){console.warn("sign:",error.message);continue}
+  (data||[]).forEach((x,k)=>{if(x&&x.signedUrl&&!x.error)m[chunk[k]]=x.signedUrl;else console.warn("photo not found:",chunk[k],x&&x.error)})}return m}
+async function signPosts(list){const m=await signPaths([...new Set(list.flatMap(pathsOf))]);signedAt=Date.now();
+ list.forEach(p=>{p.urls=pathsOf(p).map(k=>m[k]||"");p.url=p.urls[0]||""})}
+async function refreshUrls(){if((!user&&!VIEWER)||!posts.length)return;await signPosts(posts);
+ document.querySelectorAll("img[data-pid]").forEach(img=>{const p=posts.find(x=>x.id===img.dataset.pid);const u=p&&p.urls[+img.dataset.idx];if(u){delete img.dataset.retry;img.closest(".missing")?.classList.remove("missing");img.hidden=false;img.src=u}})}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&Date.now()-signedAt>SIGN_REFRESH)refreshUrls()});
+setInterval(()=>{if(document.visibilityState==="visible"&&Date.now()-signedAt>SIGN_REFRESH)refreshUrls()},60000);
+// one retry with a fresh signed URL, then a "photo missing" placeholder (post stays tappable for edit/delete)
+function photoImg(p,idx,alt){const img=new Image();img.alt=alt||"";img.loading="lazy";img.dataset.pid=p.id;img.dataset.idx=idx;
+ const miss=()=>{img.hidden=true;const box=img.parentElement;if(box&&!box.classList.contains("missing")){box.classList.add("missing");box.insertAdjacentHTML("beforeend",'<span class="miss" aria-label="Photo missing"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 5 5M14 13l2-2 5 5M3 3l18 18"/></svg><b>Photo missing</b></span>')}};
+ const retry=async()=>{if(img.dataset.retry)return miss();img.dataset.retry="1";const path=pathsOf(p)[idx];if(!path)return miss();
+  const{data}=await sb.storage.from("photos").createSignedUrl(path,SIGN_TTL);if(data&&data.signedUrl){p.urls[idx]=data.signedUrl;if(!idx)p.url=data.signedUrl;img.src=data.signedUrl}else miss()};
+ img.onerror=retry;const u=p.urls&&p.urls[idx];if(u)img.src=u;else queueMicrotask(retry);return img}
 function sortPosts(){posts.sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))}
 function tiles(g,list,filter){g.innerHTML="";
  if(!list.length){g.style.display="block";g.innerHTML='<div class="empty">'+(filter?'No posts here yet.':'Your journal is empty.<br>Tap <b>+</b> to add your first photo.')+'</div>';return}
- g.style.display="";list.forEach(p=>{const b=document.createElement("button"),i=document.createElement("img");i.src=p.url||"";i.alt=p.caption||"Photo";i.loading="lazy";b.appendChild(i);if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>openFeed(p.id,filter);g.appendChild(b)})}
+ g.style.display="";list.forEach(p=>{const b=document.createElement("button");b.appendChild(photoImg(p,0,p.caption||"Photo"));if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>openFeed(p.id,filter);g.appendChild(b)})}
 const monthKey=p=>{const d=new Date(p.created_at);return d.getFullYear()+"-"+pad(d.getMonth()+1)};
 const monthName=k=>{const[y,m]=k.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"})};
 function filterFn(f){if(!f)return()=>true;return f.type==="month"?p=>monthKey(p)===f.key:p=>catsOf(p).some(c=>same(c,f.name))}
@@ -124,15 +155,15 @@ const setExtra=l=>localStorage.setItem("pj-cats",JSON.stringify(l));
 function addExtra(c){const l=extraCats();if(!l.some(x=>same(x,c)))l.push(c);setExtra(l)}
 function card(name,list,onclick,cls){const b=document.createElement("button");b.type="button";b.className="fcard"+(cls?" "+cls:"");
  b.innerHTML='<div class="fcov"></div><div class="fn"></div><div class="fc"></div>';b.querySelector(".fn").textContent=name;
- if(list){b.querySelector(".fc").textContent=list.length+(list.length===1?" post":" posts");if(list[0]&&list[0].url){const i=new Image();i.src=list[0].url;i.alt="";i.loading="lazy";b.querySelector(".fcov").appendChild(i)}}
+ if(list){b.querySelector(".fc").textContent=list.length+(list.length===1?" post":" posts");if(list[0]){b.querySelector(".fcov").appendChild(photoImg(list[0],0,""))}}
  b.onclick=onclick;return b}
 function renderCollections(){const mf=$("monthF"),cf=$("catF");mf.innerHTML="";cf.innerHTML="";
  const months=[...new Set(posts.map(monthKey))];
  months.forEach(k=>{const f={type:"month",key:k,name:monthName(k)};mf.appendChild(card(f.name,posts.filter(filterFn(f)),()=>openFolder(f)))});
  if(!months.length)mf.innerHTML='<p class="msg">Months appear here once you post.</p>';
- $("catHint").hidden=catsOK;if(!catsOK)return;
+ $("catHint").hidden=catsOK||VIEWER;if(!catsOK)return;
  allCats().forEach(c=>{const f={type:"cat",name:c};cf.appendChild(card(c,posts.filter(filterFn(f)),()=>openFolder(f)))});
- const n=card("New category",null,()=>{const v=prompt("Name your category (e.g. a person, place, or trip):");if(!v||!normCat(v))return;const c=normCat(v);if(!allCats().some(x=>same(x,c)))addExtra(c);renderCollections()},"fnew");
+ if(VIEWER)return;const n=card("New category",null,()=>{const v=prompt("Name your category (e.g. a person, place, or trip):");if(!v||!normCat(v))return;const c=normCat(v);if(!allCats().some(x=>same(x,c)))addExtra(c);renderCollections()},"fnew");
  n.querySelector(".fcov").textContent="+";n.querySelector(".fc").textContent="People, places, trips…";cf.appendChild(n)}
 function setTab(t){tab=t;folder=null;$("tabAll").classList.toggle("on",t==="all");$("tabCol").classList.toggle("on",t==="col");$("tabAll").setAttribute("aria-selected",t==="all");$("tabCol").setAttribute("aria-selected",t==="col");showSection()}
 function showSection(){$("allV").hidden=!(tab==="all");$("colV").hidden=!(tab==="col"&&!folder);$("folderV").hidden=!folder}
@@ -167,10 +198,10 @@ $("cDel").onclick=async()=>{$("catD").close();const old=folder.name;if(!confirm(
  await rewriteCat(l=>l.filter(x=>!same(x,old)));setExtra(extraCats().filter(x=>!same(x,old)));folder=null;render()};
 
 /* ---------- carousel (reusable) ---------- */
-function carousel(urls,alt){const u=urls&&urls.length?urls:[""];const c=document.createElement("div");c.className="car";
+function carousel(p,alt){const u=p.urls&&p.urls.length?p.urls:[""];const c=document.createElement("div");c.className="car";
  c.innerHTML='<div class="track"></div><button type="button" class="nav prev" aria-label="Previous">‹</button><button type="button" class="nav next" aria-label="Next">›</button><div class="counter"></div><div class="dots"></div>';
  const tr=c.querySelector(".track"),dots=c.querySelector(".dots"),ctr=c.querySelector(".counter"),pv=c.querySelector(".prev"),nx=c.querySelector(".next");
- u.forEach((src,i)=>{const s=document.createElement("div");s.className="slide";const im=document.createElement("img");im.src=src;im.loading="lazy";im.alt=(alt||"Photo")+" "+(i+1)+"/"+u.length;s.appendChild(im);tr.appendChild(s);dots.appendChild(document.createElement("span"))});
+ u.forEach((src,i)=>{const s=document.createElement("div");s.className="slide";tr.appendChild(s);s.appendChild(photoImg(p,i,(alt||"Photo")+" "+(i+1)+"/"+u.length));tr.appendChild(s);dots.appendChild(document.createElement("span"))});
  const multi=u.length>1;pv.hidden=nx.hidden=ctr.hidden=dots.hidden=!multi;
  const idx=()=>tr.clientWidth?Math.round(tr.scrollLeft/tr.clientWidth):0;
  const upd=()=>{const i=Math.min(idx(),u.length-1);ctr.textContent=(i+1)+"/"+u.length;[...dots.children].forEach((d,k)=>d.classList.toggle("on",k===i));pv.disabled=i<=0;nx.disabled=i>=u.length-1};
@@ -182,10 +213,10 @@ function carousel(urls,alt){const u=urls&&urls.length?urls:[""];const c=document
 let gridY=0,feedPushed=false,ignorePop=0;
 const feedList=()=>posts.filter(filterFn(feedFilter));
 function buildFeed(){const f=$("feed");f.innerHTML="";$("fTitle").textContent=feedFilter?(feedFilter.type==="month"?monthName(feedFilter.key):feedFilter.name):"Posts";for(const p of feedList()){const a=document.createElement("article");a.className="post";a.dataset.id=p.id;
- a.innerHTML='<div class="phead"><time></time><button type="button" class="icon pm" aria-label="Post options">⋯</button></div><p class="pcap"></p>';
+ a.innerHTML='<div class="phead"><time></time>'+(VIEWER?"":'<button type="button" class="icon pm" aria-label="Post options">⋯</button>')+'</div><p class="pcap"></p>';
  a.querySelector("time").textContent=fmt(p.created_at);a.querySelector("time").dateTime=p.created_at;
- a.querySelector(".phead").after(carousel(p.urls||[p.url],p.caption));const c=a.querySelector(".pcap");c.textContent=p.caption||"";c.hidden=!p.caption;
- a.querySelector(".pm").onclick=()=>{cur=p;$("postD").showModal()};f.appendChild(a)}}
+ a.querySelector(".phead").after(carousel(p,p.caption));const c=a.querySelector(".pcap");c.textContent=p.caption||"";c.hidden=!p.caption;
+ if(!VIEWER)a.querySelector(".pm").onclick=()=>{cur=p;$("postD").showModal()};f.appendChild(a)}}
 function openFeed(id,filter){gridY=scrollY;feedFilter=filter?{...filter}:null;buildFeed();$("feedV").hidden=false;document.body.classList.add("lock");
  const el=$("feed").querySelector('[data-id="'+CSS.escape(id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:0;
  if(!feedPushed){history.pushState({feed:true},"");feedPushed=true}}
@@ -195,13 +226,36 @@ addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("feedV").hidden&&!documen
  if((e.key==="ArrowLeft"||e.key==="ArrowRight")&&!$("feedV").hidden&&!document.querySelector("dialog[open]")){const ps=[...$("feed").children],top=$("feedV").scrollTop+80;const a=ps.find(x=>x.offsetTop+x.offsetHeight>top);a&&a.querySelector(".car").go(e.key==="ArrowLeft"?-1:1)}});
 
 /* ---------- new post ---------- */
-function resize(file){return new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(u);const M=1600,s=Math.min(1,M/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error("encode failed")),"image/jpeg",.85)};img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Could not read this image (HEIC? try JPEG/PNG)."))};img.src=u})}
+/* ---------- robust resize (iOS canvas memory, HEIC, blank/black output) ---------- */
+const MAX_EDGE=1600,MIN_BLOB=2000;
+const isHeic=f=>/hei[cf]/i.test(f.type)||/\.hei[cf]$/i.test(f.name||"");
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function loadImg(file){return new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(file);
+ img.onload=()=>res({img,done:()=>{URL.revokeObjectURL(u);img.src=""}});img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("decode"))};img.decoding="async";img.src=u})}
+function freeCanvas(c){c.width=0;c.height=0}
+// true when the canvas is a single flat color (failed draw = white fill; lost context = black/transparent)
+function looksBlank(c){const s=document.createElement("canvas");s.width=s.height=24;const x=s.getContext("2d");if(!x)return true;x.drawImage(c,0,0,24,24);
+ let d;try{d=x.getImageData(0,0,24,24).data}catch{freeCanvas(s);return false}freeCanvas(s);let sum=0,sq=0,n=d.length/4,alpha=0;
+ for(let i=0;i<d.length;i+=4){const l=.299*d[i]+.587*d[i+1]+.114*d[i+2];sum+=l;sq+=l*l;alpha+=d[i+3]}
+ const mean=sum/n,sd=Math.sqrt(Math.max(0,sq/n-mean*mean));return alpha/n<250||sd<2}
+function toBlobSafe(c){return new Promise(res=>{try{c.toBlob(b=>{if(b&&b.size)return res(b);try{const u=c.toDataURL("image/jpeg",.85);fetch(u).then(r=>r.blob()).then(res,()=>res(null))}catch{res(null)}},"image/jpeg",.85)}catch{res(null)}})}
+async function encode(img,edge){const w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,edge/Math.max(w,h));
+ const c=document.createElement("canvas");c.width=Math.max(1,Math.round(w*s));c.height=Math.max(1,Math.round(h*s));
+ try{const x=c.getContext("2d");if(!x)return null;x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.imageSmoothingQuality="high";x.drawImage(img,0,0,c.width,c.height);
+  if(looksBlank(c))return null;const b=await toBlobSafe(c);return b&&b.size>=MIN_BLOB?b:null}finally{freeCanvas(c)}}
+async function resize(file){let L;
+ try{L=await loadImg(file)}catch{throw new Error(isHeic(file)?"“"+file.name+"” is a HEIC photo this browser can't read. Post it from your iPhone's Safari/app, or export it as JPEG first.":"Couldn't read “"+(file.name||"photo")+"”. Try a JPEG or PNG.")}
+ try{if(!L.img.naturalWidth||!L.img.naturalHeight)throw new Error("Couldn't read “"+(file.name||"photo")+"”.");
+  // sequential, release memory between tries; smaller retries help iOS when memory is tight
+  for(const edge of[MAX_EDGE,1200,900]){const b=await encode(L.img,edge);if(b)return b;await sleep(250)}
+  throw new Error("“"+(file.name||"photo")+"” came out blank while processing (usually the phone running low on memory). Try adding it again, or add fewer photos at once.")}
+ finally{L.done()}}
 async function pick(files){const list=[...files].filter(f=>f.type.startsWith("image/")||/\.hei[cf]$/i.test(f.name));
  if(!list.length)return note("Please choose image files.");const room=MAX-pending.length;
  if(room<=0)return note("A post can have at most 8 photos.");
  const take=list.slice(0,room);note(list.length>room?"Only 8 photos per post — added the first "+room+".":"Processing…");
- for(const f of take){try{const blob=await resize(f);pending.push({blob,url:URL.createObjectURL(blob)})}catch(e){note(e.message)}}
- if($("nmsg").textContent==="Processing…")note("");drawThumbs()}
+ const errs=[];for(let k=0;k<take.length;k++){note("Processing "+(k+1)+"/"+take.length+"…");try{const blob=await resize(take[k]);pending.push({blob,url:URL.createObjectURL(blob)});drawThumbs()}catch(e){errs.push(e.message)}await sleep(50)}
+ note(errs.join(" "));if(list.length>room)note((errs.join(" ")+" Only 8 photos per post — added the first "+room+".").trim());drawThumbs()}
 function note(t){$("nmsg").textContent=t}
 function drawThumbs(){const t=$("thumbs");t.innerHTML="";pending.forEach((p,i)=>{const d=document.createElement("div");d.className="thumb";d.draggable=true;
  d.innerHTML='<img alt=""><span class="n">'+(i+1)+'</span><button type="button" class="rm" aria-label="Remove">×</button><div class="mv"><button type="button" aria-label="Move left">‹</button><button type="button" aria-label="Move right">›</button></div>';
@@ -219,6 +273,7 @@ const dz=$("drop");["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e
 ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("on")}));dz.addEventListener("drop",e=>pick(e.dataTransfer.files));
 $("newF").onsubmit=async e=>{e.preventDefault();if(!pending.length)return;if(pending.length>MAX)return note("A post can have at most 8 photos.");if(!$("newDate").value)return note("Pick a date.");
  $("save").disabled=true;const done=[];let error=null;
+ const bad=pending.findIndex(p=>!p.blob||p.blob.size<MIN_BLOB);if(bad>=0){$("save").disabled=false;return note("Photo "+(bad+1)+" didn't process correctly — remove it and add it again.")}
  for(let i=0;i<pending.length;i++){$("save").textContent="Uploading "+(i+1)+"/"+pending.length+"…";const path=user.id+"/"+crypto.randomUUID()+".jpg";
   ({error}=await sb.storage.from("photos").upload(path,pending[i].blob,{contentType:"image/jpeg"}));if(error)break;done.push(path)}
  if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done,created_at:fromInputs($("newDate").value,$("newTime").value),...(catsOK?{categories:[...newSel]}:{})}));
@@ -235,6 +290,35 @@ $("editF").onsubmit=async e=>{e.preventDefault();const c=$("eCap").value.trim(),
  cur.caption=c;cur.created_at=t;if(catsOK){cur.categories=[...editSel];setExtra(extraCats().filter(x=>!posts.some(p=>catsOf(p).some(y=>same(x,y)))))}$("editD").close();const y=$("feedV").scrollTop;render();if(!$("feedV").hidden){const el=$("feed").querySelector('[data-id="'+CSS.escape(cur.id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:y}};
 $("pmDel").onclick=async()=>{$("postD").close();if(!confirm("Delete this post permanently?"))return;const{error}=await sb.from("posts").delete().eq("id",cur.id);if(error)return alert(error.message);
  await sb.storage.from("photos").remove([...new Set([...pathsOf(cur),cur.image_path].filter(Boolean))]);posts=posts.filter(p=>p.id!==cur.id);const y=$("feedV").scrollTop;render();$("feedV").scrollTop=y;if(!posts.length)closeFeed()};
+
+/* ---------- share (owner) ---------- */
+let share={ok:false,on:false,token:null};
+const newToken=()=>{const b=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...b)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}; // 256-bit
+const shareUrl=t=>location.origin+location.pathname+"#share="+t;
+async function loadShare(){const{data,error}=await sb.from("profiles").select("share_enabled,share_token").eq("user_id",user.id).maybeSingle();
+ share.ok=!error;if(error){console.warn("sharing:",error.message);return}share.on=!!(data&&data.share_enabled);share.token=data&&data.share_token||null}
+function drawShare(){$("shOn").checked=share.on;$("shOn").disabled=!share.ok;$("shState").textContent=share.on?"Sharing is on":"Sharing is off";
+ $("shLinkBox").hidden=!(share.on&&share.token);if(share.token)$("shLink").value=shareUrl(share.token);$("shNative").hidden=!navigator.share;
+ if(!share.ok)$("shMsg").textContent="Sharing needs a quick database update — run migrate-sharing.sql in Supabase."}
+async function saveShare(patch){$("shMsg").textContent="Saving…";const row={user_id:user.id,...patch};
+ const{error}=await sb.from("profiles").upsert(row,{onConflict:"user_id"});if(error){$("shMsg").textContent="Couldn't save: "+error.message;await loadShare();drawShare();return false}
+ Object.assign(share,{on:patch.share_enabled??share.on,token:patch.share_token??share.token});$("shMsg").textContent="";drawShare();return true}
+$("mShare").onclick=async()=>{$("menuD").close();$("shMsg").textContent="";await loadShare();drawShare();$("shareD").showModal()};
+$("shClose").onclick=()=>$("shareD").close();
+$("shOn").onchange=async()=>{const on=$("shOn").checked;await saveShare(on?{share_enabled:true,...(share.token?{}:{share_token:newToken()})}:{share_enabled:false})};
+$("shReset").onclick=async()=>{if(!confirm("Make a new link? The current link will stop working."))return;if(await saveShare({share_token:newToken()}))$("shMsg").textContent="New link ready."};
+$("shCopy").onclick=async()=>{const v=$("shLink").value;try{await navigator.clipboard.writeText(v)}catch{$("shLink").select();document.execCommand("copy")}$("shMsg").textContent="Link copied."};
+$("shNative").onclick=async()=>{try{await navigator.share({title:(profile.title||DEF_TITLE),url:$("shLink").value})}catch{}};
+
+/* ---------- viewer (read-only, no login) ---------- */
+function notAvailable(){$("loginV").hidden=true;$("appV").hidden=true;$("naV").hidden=false}
+async function startViewer(){$("loginV").hidden=true;
+ const pr=await sb.rpc("get_shared_profile",{p_token:SHARE});const row=pr.data&&pr.data[0];
+ if(pr.error||!row){if(pr.error)console.warn("share:",pr.error.message);return notAvailable()}
+ profile={title:row.title||DEF_TITLE,bio:row.bio||""};profileOK=true;$("appV").hidden=false;drawProfile();$("count").textContent="Loading…";
+ const{data,error}=await sb.rpc("get_shared_posts",{p_token:SHARE});if(error){console.warn("share:",error.message);return notAvailable()}
+ posts=data||[];catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);render()}
+addEventListener("hashchange",()=>{const t=(location.hash.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||null;if(t!==SHARE)location.reload()});
 
 /* ---------- export ---------- */
 const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
