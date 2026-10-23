@@ -14,20 +14,39 @@
 <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
 <button class="primary" type="submit">Sign in</button><button type="button" id="magic">Email me a sign-in link</button><div class="msg" id="lmsg"></div></form></section>
 <section id="appV" hidden>
-<header><div class="bar"><h1>Photo Journal</h1>
-<button id="exp" title="Export backup">⇩<span class="lbl"> Export</span></button>
-<button id="out" title="Sign out">⎋<span class="lbl"> Sign out</span></button>
-<button id="add" class="primary">+ New</button></div></header>
-<main><p class="count" id="count"></p><div id="grid" class="grid"></div></main></section>
+<main>
+<section class="profile">
+ <div class="ptop"><h1 class="ptitle" id="pTitle">PHOTO JOURNAL</h1><button type="button" class="icon" id="menuBtn" aria-label="Menu" aria-haspopup="true">⋯</button></div>
+ <p class="bio" id="pBio"></p>
+ <p class="count" id="count"></p><p class="msg" id="pHint" hidden></p>
+</section>
+<div id="grid" class="grid"></div></main>
+<button type="button" class="fab" id="add" aria-label="New post">+</button>
+</section>
+<section id="feedV" class="feedV" hidden aria-label="Posts">
+ <div class="fbar"><button type="button" class="icon" id="back" aria-label="Back to grid">‹</button><span class="ftitle" id="fTitle">Posts</span></div>
+ <div class="feed" id="feed"></div>
+</section>
+<dialog id="menuD" class="sheet"><div class="sheetb">
+ <button type="button" id="mProfile">Edit profile</button><button type="button" id="exp">Export backup</button>
+ <button type="button" id="out" class="danger">Sign out</button><button type="button" id="mClose">Cancel</button></div></dialog>
+<dialog id="postD" class="sheet"><div class="sheetb">
+ <button type="button" id="pmEdit">Edit caption &amp; date</button><button type="button" id="pmDel" class="danger">Delete post</button><button type="button" id="pmClose">Cancel</button></div></dialog>
 <dialog id="newD"><form class="form" id="newF"><h2>New post</h2>
 <div class="drop" id="drop">Click or drop up to 8 photos here</div><input id="file" type="file" accept="image/*" multiple hidden>
 <div class="thumbs" id="thumbs"></div><div class="msg" id="nmsg"></div>
 <textarea id="newCap" placeholder="Write a caption…"></textarea>
+<div class="when"><label>Date<input type="date" id="newDate" required></label><label>Time <span class="opt">(optional)</span><input type="time" id="newTime"></label></div>
 <div class="row"><button type="button" id="newCancel">Cancel</button><button class="primary" id="save" type="submit" disabled>Post</button></div></form></dialog>
-<dialog id="viewD"><div class="view"><div class="car" id="car"><div class="track" id="track"></div><button type="button" class="nav prev" id="prev" aria-label="Previous">‹</button><button type="button" class="nav next" id="next" aria-label="Next">›</button><div class="counter" id="ctr"></div><div class="dots" id="dots"></div></div><div class="side">
-<div class="date" id="vDate"></div><div class="cap" id="vCap"></div><textarea id="vEdit" hidden></textarea>
-<div class="row" id="vBtns"><button class="danger" id="del">Delete</button><button id="edit">Edit</button><button id="close">Close</button></div>
-<div class="row" id="eBtns" hidden><button id="eCancel">Cancel</button><button class="primary" id="eSave">Save</button></div></div></div></dialog>
+<dialog id="editD"><form class="form" id="editF"><h2>Edit post</h2>
+<textarea id="eCap" placeholder="Caption"></textarea>
+<div class="when"><label>Date<input type="date" id="eDate" required></label><label>Time <span class="opt">(optional)</span><input type="time" id="eTime"></label></div>
+<div class="row"><button type="button" id="eCancel">Cancel</button><button class="primary" type="submit" id="eSave">Save</button></div></form></dialog>
+<dialog id="profD"><form class="form" id="profF"><h2>Edit profile</h2>
+<label class="fl">Title<input type="text" id="prTitle" maxlength="60" placeholder="PHOTO JOURNAL"></label>
+<label class="fl">Bio<textarea id="prBio" maxlength="500" placeholder="A few words about this journal…"></textarea></label>
+<div class="msg" id="prMsg"></div>
+<div class="row"><button type="button" id="prCancel">Cancel</button><button class="primary" type="submit" id="prSave">Save</button></div></form></dialog>
 <script src="config.js"></script><script src="supabase.js"></script>
 <script>
 "use strict";
@@ -35,26 +54,81 @@ const $=id=>document.getElementById(id);
 if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 const configured=!/YOUR-/.test(window.SUPABASE_URL+window.SUPABASE_ANON_KEY);
 const sb=configured?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}}):null;
-let user=null,posts=[],cur=null,pending=[];
-const MAX=8;
+const MAX=8,DEF_TITLE="PHOTO JOURNAL";
+let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true;
 const pathsOf=p=>(Array.isArray(p.image_paths)&&p.image_paths.length)?p.image_paths:(p.image_path?[p.image_path]:[]);
-const fmt=t=>new Date(t).toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric"})+" · "+new Date(t).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
-function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn}
-async function onSession(s){user=s&&s.user;view(!!user);if(user)load()}
+const fmt=t=>{const d=new Date(t);return d.toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})+(hasTime(t)?" · "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}):"")};
+const pad=n=>String(n).padStart(2,"0");
+const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),toTime=d=>pad(d.getHours())+":"+pad(d.getMinutes());
+// no time given -> stored as 12:00:01 local (noon avoids timezone date shifts; :01 marks "no time" so it isn't displayed)
+const fromInputs=(d,t)=>{const[y,m,da]=d.split("-").map(Number);if(!t)return new Date(y,m-1,da,12,0,1).toISOString();const[h,mi]=t.split(":").map(Number);return new Date(y,m-1,da,h,mi,0).toISOString()};
+const hasTime=t=>{const d=new Date(t);return !(d.getHours()===12&&d.getMinutes()===0&&d.getSeconds()===1)};
+function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn;if(!signedIn)closeFeed(true)}
+async function onSession(s){user=s&&s.user;view(!!user);if(user){loadProfile();load()}}
 if(!sb){view(false);$("lmsg").textContent="Not configured yet: add your Supabase URL and anon key to config.js.";$("loginF").querySelectorAll("button,input").forEach(e=>e.disabled=true)}
 else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})}
 $("loginF").onsubmit=async e=>{e.preventDefault();$("lmsg").textContent="Signing in…";const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});$("lmsg").textContent=error?error.message:""};
 $("magic").onclick=async()=>{if(!$("em").value)return $("lmsg").textContent="Enter your email first.";const{error}=await sb.auth.signInWithOtp({email:$("em").value,options:{shouldCreateUser:false,emailRedirectTo:location.href.split("#")[0]}});$("lmsg").textContent=error?error.message:"Check your email for the link."};
-$("out").onclick=async()=>{await sb.auth.signOut();user=null;posts=[];$("grid").innerHTML="";view(false)};
+
+/* ---------- menu ---------- */
+$("menuBtn").onclick=()=>$("menuD").showModal();$("mClose").onclick=()=>$("menuD").close();
+document.querySelectorAll("dialog.sheet").forEach(d=>d.addEventListener("click",e=>{if(e.target===d)d.close()}));
+$("out").onclick=async()=>{$("menuD").close();await sb.auth.signOut();user=null;posts=[];$("grid").innerHTML="";view(false)};
+
+/* ---------- profile ---------- */
+function drawProfile(){$("pTitle").textContent=(profile.title||DEF_TITLE).toUpperCase();$("pBio").textContent=profile.bio||"";$("pBio").hidden=!profile.bio;
+ $("pHint").hidden=profileOK;$("pHint").textContent=profileOK?"":"Profile isn't syncing yet — run migrate-profile.sql in Supabase."}
+async function loadProfile(){drawProfile();const{data,error}=await sb.from("profiles").select("title,bio").eq("user_id",user.id).maybeSingle();
+ if(error){profileOK=false;console.warn("profiles:",error.message)}else{profileOK=true;if(data)profile={title:data.title||DEF_TITLE,bio:data.bio||""}}drawProfile()}
+$("mProfile").onclick=()=>{$("menuD").close();$("prTitle").value=profile.title||DEF_TITLE;$("prBio").value=profile.bio||"";$("prMsg").textContent=profileOK?"":"Profile table missing: changes will only show until you reload. Run migrate-profile.sql.";$("profD").showModal()};
+$("pTitle").onclick=$("mProfile").onclick;
+$("prCancel").onclick=()=>$("profD").close();
+$("profF").onsubmit=async e=>{e.preventDefault();const p={title:($("prTitle").value.trim()||DEF_TITLE).toUpperCase(),bio:$("prBio").value.trim()};
+ $("prSave").disabled=true;const{error}=await sb.from("profiles").upsert({user_id:user.id,...p,updated_at:new Date().toISOString()},{onConflict:"user_id"});$("prSave").disabled=false;
+ profile=p;if(error){profileOK=false;$("prMsg").textContent="Couldn't sync ("+error.message+"). Run migrate-profile.sql.";drawProfile();return}
+ profileOK=true;drawProfile();$("profD").close()};
+
+/* ---------- posts ---------- */
 async function load(){$("count").textContent="Loading…";
  const{data,error}=await sb.from("posts").select("*").order("created_at",{ascending:false});
  if(error){$("count").textContent="Error: "+error.message;return}
  posts=data;const all=posts.flatMap(pathsOf);if(all.length){const{data:s}=await sb.storage.from("photos").createSignedUrls(all,3600);const m={};(s||[]).forEach(x=>m[x.path]=x.signedUrl);posts.forEach(p=>{p.urls=pathsOf(p).map(k=>m[k]||"");p.url=p.urls[0]})}
  render()}
-function render(){const g=$("grid");g.innerHTML="";
- $("count").textContent=posts.length?posts.length+(posts.length>1?" moments":" moment"):"";
- if(!posts.length){g.style.display="block";g.innerHTML='<div class="empty">Your journal is empty.<br>Tap <b>+ New</b> to add your first photo.</div>';return}
- g.style.display="";for(const p of posts){const b=document.createElement("button"),i=document.createElement("img");i.src=p.url||"";i.alt=p.caption||"Photo";i.loading="lazy";b.appendChild(i);if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>show(p);g.appendChild(b)}}
+function sortPosts(){posts.sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))}
+function render(){sortPosts();const g=$("grid");g.innerHTML="";
+ $("count").textContent=posts.length+(posts.length===1?" moment":" moments");
+ if(!posts.length){g.style.display="block";g.innerHTML='<div class="empty">Your journal is empty.<br>Tap <b>+</b> to add your first photo.</div>';return}
+ g.style.display="";posts.forEach((p,k)=>{const b=document.createElement("button"),i=document.createElement("img");i.src=p.url||"";i.alt=p.caption||"Photo";i.loading="lazy";b.appendChild(i);if(p.urls&&p.urls.length>1){b.insertAdjacentHTML("beforeend",'<span class="multi" aria-label="'+p.urls.length+' photos"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="13" height="13" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg></span>')}b.onclick=()=>openFeed(p.id);g.appendChild(b)});
+ if(!$("feedV").hidden)buildFeed()}
+
+/* ---------- carousel (reusable) ---------- */
+function carousel(urls,alt){const u=urls&&urls.length?urls:[""];const c=document.createElement("div");c.className="car";
+ c.innerHTML='<div class="track"></div><button type="button" class="nav prev" aria-label="Previous">‹</button><button type="button" class="nav next" aria-label="Next">›</button><div class="counter"></div><div class="dots"></div>';
+ const tr=c.querySelector(".track"),dots=c.querySelector(".dots"),ctr=c.querySelector(".counter"),pv=c.querySelector(".prev"),nx=c.querySelector(".next");
+ u.forEach((src,i)=>{const s=document.createElement("div");s.className="slide";const im=document.createElement("img");im.src=src;im.loading="lazy";im.alt=(alt||"Photo")+" "+(i+1)+"/"+u.length;s.appendChild(im);tr.appendChild(s);dots.appendChild(document.createElement("span"))});
+ const multi=u.length>1;pv.hidden=nx.hidden=ctr.hidden=dots.hidden=!multi;
+ const idx=()=>tr.clientWidth?Math.round(tr.scrollLeft/tr.clientWidth):0;
+ const upd=()=>{const i=Math.min(idx(),u.length-1);ctr.textContent=(i+1)+"/"+u.length;[...dots.children].forEach((d,k)=>d.classList.toggle("on",k===i));pv.disabled=i<=0;nx.disabled=i>=u.length-1};
+ const go=d=>tr.scrollTo({left:(idx()+d)*tr.clientWidth,behavior:"smooth"});
+ tr.addEventListener("scroll",()=>requestAnimationFrame(upd),{passive:true});pv.onclick=()=>go(-1);nx.onclick=()=>go(1);
+ c.tabIndex=-1;c.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")go(-1);if(e.key==="ArrowRight")go(1)});c.go=go;upd();return c}
+
+/* ---------- feed ---------- */
+let gridY=0;
+function buildFeed(){const f=$("feed");f.innerHTML="";for(const p of posts){const a=document.createElement("article");a.className="post";a.dataset.id=p.id;
+ a.innerHTML='<div class="phead"><time></time><button type="button" class="icon pm" aria-label="Post options">⋯</button></div><p class="pcap"></p>';
+ a.querySelector("time").textContent=fmt(p.created_at);a.querySelector("time").dateTime=p.created_at;
+ a.querySelector(".phead").after(carousel(p.urls||[p.url],p.caption));const c=a.querySelector(".pcap");c.textContent=p.caption||"";c.hidden=!p.caption;
+ a.querySelector(".pm").onclick=()=>{cur=p;$("postD").showModal()};f.appendChild(a)}}
+function openFeed(id){gridY=scrollY;buildFeed();$("feedV").hidden=false;document.body.classList.add("lock");
+ const el=$("feed").querySelector('[data-id="'+CSS.escape(id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:0;
+ if(history.state?.feed!==true)history.pushState({feed:true},"")}
+function closeFeed(silent){if($("feedV").hidden)return;$("feedV").hidden=true;document.body.classList.remove("lock");scrollTo(0,gridY);if(!silent&&history.state?.feed)history.back()}
+$("back").onclick=()=>closeFeed();addEventListener("popstate",()=>closeFeed(true));
+addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("feedV").hidden&&!document.querySelector("dialog[open]"))closeFeed();
+ if((e.key==="ArrowLeft"||e.key==="ArrowRight")&&!$("feedV").hidden&&!document.querySelector("dialog[open]")){const ps=[...$("feed").children],top=$("feedV").scrollTop+80;const a=ps.find(x=>x.offsetTop+x.offsetHeight>top);a&&a.querySelector(".car").go(e.key==="ArrowLeft"?-1:1)}});
+
+/* ---------- new post ---------- */
 function resize(file){return new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(u);const M=1600,s=Math.min(1,M/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error("encode failed")),"image/jpeg",.85)};img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Could not read this image (HEIC? try JPEG/PNG)."))};img.src=u})}
 async function pick(files){const list=[...files].filter(f=>f.type.startsWith("image/")||/\.hei[cf]$/i.test(f.name));
  if(!list.length)return note("Please choose image files.");const room=MAX-pending.length;
@@ -72,38 +146,34 @@ function drawThumbs(){const t=$("thumbs");t.innerHTML="";pending.forEach((p,i)=>
  $("drop").textContent=pending.length?(pending.length+"/8 photos — tap or drop to add more"):"Click or drop up to 8 photos here";$("drop").classList.toggle("full",pending.length>=MAX);
  $("save").disabled=!pending.length}
 function move(a,b){if(b<0||b>=pending.length)return;const[x]=pending.splice(a,1);pending.splice(b,0,x);drawThumbs()}
-$("add").onclick=()=>{pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newCap").value="";note("");drawThumbs();$("save").textContent="Post";$("newD").showModal()};
+$("add").onclick=()=>{pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newCap").value="";const n=new Date();$("newDate").value=toDate(n);$("newDate").max=toDate(n);$("newTime").value=toTime(n);note("");drawThumbs();$("save").textContent="Post";$("newD").showModal()};
 $("newCancel").onclick=()=>$("newD").close();
 $("drop").onclick=()=>{if(pending.length>=MAX)return note("A post can have at most 8 photos.");$("file").click()};$("file").onchange=e=>{pick(e.target.files);e.target.value=""};
 const dz=$("drop");["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("on")}));
 ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("on")}));dz.addEventListener("drop",e=>pick(e.dataTransfer.files));
-$("newF").onsubmit=async e=>{e.preventDefault();if(!pending.length)return;if(pending.length>MAX)return note("A post can have at most 8 photos.");
+$("newF").onsubmit=async e=>{e.preventDefault();if(!pending.length)return;if(pending.length>MAX)return note("A post can have at most 8 photos.");if(!$("newDate").value)return note("Pick a date.");
  $("save").disabled=true;const done=[];let error=null;
  for(let i=0;i<pending.length;i++){$("save").textContent="Uploading "+(i+1)+"/"+pending.length+"…";const path=user.id+"/"+crypto.randomUUID()+".jpg";
   ({error}=await sb.storage.from("photos").upload(path,pending[i].blob,{contentType:"image/jpeg"}));if(error)break;done.push(path)}
- if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done}));
+ if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:done[0],image_paths:done,created_at:fromInputs($("newDate").value,$("newTime").value)}));
  if(error){if(done.length)await sb.storage.from("photos").remove(done);
   alert("Upload failed: "+error.message+(/image_paths/.test(error.message)?"\n\nRun migrate-multi.sql in the Supabase SQL editor first.":""));$("save").disabled=false;$("save").textContent="Post";return}
  pending.forEach(p=>URL.revokeObjectURL(p.url));pending=[];$("newD").close();load()};
-function editing(on){$("vEdit").hidden=!on;$("vCap").hidden=on;$("eBtns").hidden=!on;$("vBtns").hidden=on}
-function show(p){cur=p;const u=p.urls&&p.urls.length?p.urls:[p.url||""];const tr=$("track"),dots=$("dots");tr.innerHTML="";dots.innerHTML="";
- u.forEach((src,i)=>{const s=document.createElement("div");s.className="slide";const im=document.createElement("img");im.src=src;im.alt=(p.caption||"Photo")+" "+(i+1)+"/"+u.length;s.appendChild(im);tr.appendChild(s);const d=document.createElement("span");dots.appendChild(d)});
- const multi=u.length>1;$("prev").hidden=$("next").hidden=$("ctr").hidden=dots.hidden=!multi;
- $("viewD").showModal();tr.scrollLeft=0;slideUpd();$("vDate").textContent=fmt(p.created_at);$("vCap").textContent=p.caption||"";editing(false)}
-$("close").onclick=()=>$("viewD").close();
-const idx=()=>{const t=$("track");return t.clientWidth?Math.round(t.scrollLeft/t.clientWidth):0};
-function slideUpd(){const n=$("track").children.length,i=Math.min(idx(),n-1);$("ctr").textContent=(i+1)+"/"+n;[...$("dots").children].forEach((d,k)=>d.classList.toggle("on",k===i));$("prev").disabled=i<=0;$("next").disabled=i>=n-1}
-function go(d){const t=$("track");t.scrollTo({left:(idx()+d)*t.clientWidth,behavior:"smooth"})}
-$("track").addEventListener("scroll",()=>requestAnimationFrame(slideUpd),{passive:true});
-$("prev").onclick=()=>go(-1);$("next").onclick=()=>go(1);
-$("viewD").addEventListener("keydown",e=>{if(e.target.tagName==="TEXTAREA")return;if(e.key==="ArrowLeft")go(-1);if(e.key==="ArrowRight")go(1)});
-addEventListener("resize",()=>{if($("viewD").open)slideUpd()});
-$("edit").onclick=()=>{$("vEdit").value=cur.caption||"";editing(true);$("vEdit").focus()};$("eCancel").onclick=()=>editing(false);
-$("eSave").onclick=async()=>{const c=$("vEdit").value.trim();const{error}=await sb.from("posts").update({caption:c}).eq("id",cur.id);if(error)return alert(error.message);cur.caption=c;$("vCap").textContent=c;editing(false);render()};
-$("del").onclick=async()=>{if(!confirm("Delete this post permanently?"))return;const{error}=await sb.from("posts").delete().eq("id",cur.id);if(error)return alert(error.message);await sb.storage.from("photos").remove([...new Set([...pathsOf(cur),cur.image_path].filter(Boolean))]);$("viewD").close();load()};
+
+/* ---------- edit / delete ---------- */
+$("pmClose").onclick=()=>$("postD").close();
+$("pmEdit").onclick=()=>{$("postD").close();const d=new Date(cur.created_at);$("eCap").value=cur.caption||"";$("eDate").value=toDate(d);$("eTime").value=hasTime(cur.created_at)?toTime(d):"";$("editD").showModal()};
+$("eCancel").onclick=()=>$("editD").close();
+$("editF").onsubmit=async e=>{e.preventDefault();const c=$("eCap").value.trim(),t=fromInputs($("eDate").value,$("eTime").value);$("eSave").disabled=true;
+ const{error}=await sb.from("posts").update({caption:c,created_at:t}).eq("id",cur.id);$("eSave").disabled=false;if(error)return alert(error.message);
+ cur.caption=c;cur.created_at=t;$("editD").close();const y=$("feedV").scrollTop;render();if(!$("feedV").hidden){const el=$("feed").querySelector('[data-id="'+CSS.escape(cur.id)+'"]');$("feedV").scrollTop=el?el.offsetTop-$("feedV").querySelector(".fbar").offsetHeight:y}};
+$("pmDel").onclick=async()=>{$("postD").close();if(!confirm("Delete this post permanently?"))return;const{error}=await sb.from("posts").delete().eq("id",cur.id);if(error)return alert(error.message);
+ await sb.storage.from("photos").remove([...new Set([...pathsOf(cur),cur.image_path].filter(Boolean))]);posts=posts.filter(p=>p.id!==cur.id);const y=$("feedV").scrollTop;render();$("feedV").scrollTop=y;if(!posts.length)closeFeed()};
+
+/* ---------- export ---------- */
 const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
-$("exp").onclick=async()=>{if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];
+$("exp").onclick=async()=>{$("menuD").close();if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];
  try{for(const p of posts){const images=[];for(const k of pathsOf(p)){const{data,error}=await sb.storage.from("photos").download(k);if(error)throw error;images.push(await b64(data))}out.push({id:p.id,date:Date.parse(p.created_at),caption:p.caption,image:images[0],images})}
- const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:2,exported:Date.now(),posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:2,exported:Date.now(),profile,posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
  catch(e){alert("Export failed: "+e.message)}finally{$("exp").disabled=false}};
 </script></body></html>
