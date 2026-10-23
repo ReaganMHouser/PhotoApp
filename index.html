@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Photo Journal</title>
+<meta name="theme-color" content="#faf6f0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Journal"><meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root{--bg:#faf6f0;--card:#fff;--ink:#3a2f28;--muted:#9a8b7e;--accent:#c8734a;--line:#ece3d8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:rgba(250,246,240,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar{max-width:960px;margin:auto;display:flex;align-items:center;gap:8px;padding:12px 16px}
+h1{font-family:Georgia,serif;font-weight:normal;font-size:24px;margin:0;flex:1;letter-spacing:.5px}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:999px;cursor:pointer}
+button:hover,.btn:hover{border-color:var(--accent)}
+.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.danger{color:#b3412e}
+main{max-width:960px;margin:auto;padding:16px}
+.count{color:var(--muted);font-size:13px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.grid button{padding:0;border:0;border-radius:0;aspect-ratio:1;overflow:hidden;background:var(--line)}
+.grid img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s}
+.grid button:hover img{transform:scale(1.04)}
+.empty{text-align:center;color:var(--muted);padding:80px 20px;border:2px dashed var(--line);border-radius:16px}
+dialog{border:0;border-radius:16px;padding:0;max-width:min(920px,94vw);width:100%;background:var(--card);color:var(--ink);box-shadow:0 20px 60px rgba(60,40,20,.25)}
+dialog::backdrop{background:rgba(40,30,22,.55)}
+.view{display:flex;flex-wrap:wrap}.view img{flex:1 1 380px;max-height:80vh;object-fit:contain;background:#1e1915;min-width:0;width:100%}
+.side{flex:1 1 260px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.date{color:var(--muted);font-size:13px}.cap{white-space:pre-wrap;flex:1}
+textarea{width:100%;min-height:110px;font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);color:var(--ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.form{padding:20px;display:flex;flex-direction:column;gap:12px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:30px;text-align:center;color:var(--muted);cursor:pointer}
+.drop.on{border-color:var(--accent);background:#fff6ef}.drop img{max-width:100%;max-height:300px;border-radius:8px}
+h2{font-family:Georgia,serif;font-weight:normal;margin:0}
+@media(max-width:600px){.grid{gap:2px}.bar .lbl{display:none}h1{font-size:20px}}
+.login{max-width:360px;margin:12vh auto;background:var(--card);border-radius:16px;padding:28px;box-shadow:0 10px 40px rgba(60,40,20,.08);display:flex;flex-direction:column;gap:12px}
+input[type=email],input[type=password]{font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
+.msg{color:var(--muted);font-size:13px;min-height:1em}.bar{padding-top:max(12px,env(safe-area-inset-top))}
+body{-webkit-tap-highlight-color:transparent}[hidden]{display:none!important}
+</style></head><body>
+<section id="loginV" hidden><form class="login" id="loginF"><h1 style="text-align:center">Photo Journal</h1>
+<input id="em" type="email" placeholder="Email" autocomplete="username" required>
+<input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+<button class="primary" type="submit">Sign in</button><button type="button" id="magic">Email me a sign-in link</button><div class="msg" id="lmsg"></div></form></section>
+<section id="appV" hidden>
+<header><div class="bar"><h1>Photo Journal</h1>
+<button id="exp" title="Export backup">⇩<span class="lbl"> Export</span></button>
+<button id="out" title="Sign out">⎋<span class="lbl"> Sign out</span></button>
+<button id="add" class="primary">+ New</button></div></header>
+<main><p class="count" id="count"></p><div id="grid" class="grid"></div></main></section>
+<dialog id="newD"><form class="form" id="newF"><h2>New post</h2>
+<div class="drop" id="drop">Click or drop an image here</div><input id="file" type="file" accept="image/*" hidden>
+<textarea id="newCap" placeholder="Write a caption…"></textarea>
+<div class="row"><button type="button" id="newCancel">Cancel</button><button class="primary" id="save" type="submit" disabled>Post</button></div></form></dialog>
+<dialog id="viewD"><div class="view"><img id="vImg" alt=""><div class="side">
+<div class="date" id="vDate"></div><div class="cap" id="vCap"></div><textarea id="vEdit" hidden></textarea>
+<div class="row" id="vBtns"><button class="danger" id="del">Delete</button><button id="edit">Edit</button><button id="close">Close</button></div>
+<div class="row" id="eBtns" hidden><button id="eCancel">Cancel</button><button class="primary" id="eSave">Save</button></div></div></div></dialog>
+<script src="config.js"></script><script src="supabase.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+const configured=!/YOUR-/.test(window.SUPABASE_URL+window.SUPABASE_ANON_KEY);
+const sb=configured?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}}):null;
+let user=null,posts=[],cur=null,pending=null;
+const fmt=t=>new Date(t).toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric"})+" · "+new Date(t).toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn}
+async function onSession(s){user=s&&s.user;view(!!user);if(user)load()}
+if(!sb){view(false);$("lmsg").textContent="Not configured yet: add your Supabase URL and anon key to config.js.";$("loginF").querySelectorAll("button,input").forEach(e=>e.disabled=true)}
+else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})}
+$("loginF").onsubmit=async e=>{e.preventDefault();$("lmsg").textContent="Signing in…";const{error}=await sb.auth.signInWithPassword({email:$("em").value,password:$("pw").value});$("lmsg").textContent=error?error.message:""};
+$("magic").onclick=async()=>{if(!$("em").value)return $("lmsg").textContent="Enter your email first.";const{error}=await sb.auth.signInWithOtp({email:$("em").value,options:{shouldCreateUser:false,emailRedirectTo:location.href.split("#")[0]}});$("lmsg").textContent=error?error.message:"Check your email for the link."};
+$("out").onclick=async()=>{await sb.auth.signOut();user=null;posts=[];$("grid").innerHTML="";view(false)};
+async function load(){$("count").textContent="Loading…";
+ const{data,error}=await sb.from("posts").select("*").order("created_at",{ascending:false});
+ if(error){$("count").textContent="Error: "+error.message;return}
+ posts=data;if(posts.length){const{data:s}=await sb.storage.from("photos").createSignedUrls(posts.map(p=>p.image_path),3600);const m={};(s||[]).forEach(x=>m[x.path]=x.signedUrl);posts.forEach(p=>p.url=m[p.image_path])}
+ render()}
+function render(){const g=$("grid");g.innerHTML="";
+ $("count").textContent=posts.length?posts.length+(posts.length>1?" moments":" moment"):"";
+ if(!posts.length){g.style.display="block";g.innerHTML='<div class="empty">Your journal is empty.<br>Tap <b>+ New</b> to add your first photo.</div>';return}
+ g.style.display="";for(const p of posts){const b=document.createElement("button"),i=document.createElement("img");i.src=p.url||"";i.alt=p.caption||"Photo";i.loading="lazy";b.appendChild(i);b.onclick=()=>show(p);g.appendChild(b)}}
+function resize(file){return new Promise((res,rej)=>{const img=new Image(),u=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(u);const M=1600,s=Math.min(1,M/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error("encode failed")),"image/jpeg",.85)};img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("Could not read this image (HEIC? try JPEG/PNG)."))};img.src=u})}
+async function pick(f){if(!f||!f.type.startsWith("image/")&&!/\.hei[cf]$/i.test(f.name))return alert("Please choose an image file.");try{pending=await resize(f);$("drop").innerHTML="";const i=new Image();i.src=URL.createObjectURL(pending);$("drop").appendChild(i);$("save").disabled=false}catch(e){alert(e.message)}}
+$("add").onclick=()=>{pending=null;$("newCap").value="";$("drop").textContent="Click or drop an image here";$("save").disabled=true;$("save").textContent="Post";$("newD").showModal()};
+$("newCancel").onclick=()=>$("newD").close();
+$("drop").onclick=()=>$("file").click();$("file").onchange=e=>{pick(e.target.files[0]);e.target.value=""};
+const dz=$("drop");["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("on")}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("on")}));dz.addEventListener("drop",e=>pick(e.dataTransfer.files[0]));
+$("newF").onsubmit=async e=>{e.preventDefault();if(!pending)return;$("save").disabled=true;$("save").textContent="Uploading…";
+ const path=user.id+"/"+crypto.randomUUID()+".jpg";
+ let{error}=await sb.storage.from("photos").upload(path,pending,{contentType:"image/jpeg"});
+ if(!error)({error}=await sb.from("posts").insert({caption:$("newCap").value.trim(),image_path:path}));
+ if(error){alert("Upload failed: "+error.message);$("save").disabled=false;$("save").textContent="Post";return}
+ $("newD").close();load()};
+function editing(on){$("vEdit").hidden=!on;$("vCap").hidden=on;$("eBtns").hidden=!on;$("vBtns").hidden=on}
+function show(p){cur=p;$("vImg").src=p.url||"";$("vDate").textContent=fmt(p.created_at);$("vCap").textContent=p.caption||"";editing(false);$("viewD").showModal()}
+$("close").onclick=()=>$("viewD").close();
+$("edit").onclick=()=>{$("vEdit").value=cur.caption||"";editing(true);$("vEdit").focus()};$("eCancel").onclick=()=>editing(false);
+$("eSave").onclick=async()=>{const c=$("vEdit").value.trim();const{error}=await sb.from("posts").update({caption:c}).eq("id",cur.id);if(error)return alert(error.message);cur.caption=c;$("vCap").textContent=c;editing(false);render()};
+$("del").onclick=async()=>{if(!confirm("Delete this post permanently?"))return;const{error}=await sb.from("posts").delete().eq("id",cur.id);if(error)return alert(error.message);await sb.storage.from("photos").remove([cur.image_path]);$("viewD").close();load()};
+const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
+$("exp").onclick=async()=>{if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];
+ try{for(const p of posts){const{data,error}=await sb.storage.from("photos").download(p.image_path);if(error)throw error;out.push({id:p.id,date:Date.parse(p.created_at),caption:p.caption,image:await b64(data)})}
+ const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify({app:"photo-journal",version:1,exported:Date.now(),posts:out})],{type:"application/json"}));a.download="photo-journal-"+new Date().toISOString().slice(0,10)+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+ catch(e){alert("Export failed: "+e.message)}finally{$("exp").disabled=false}};
+</script></body></html>
