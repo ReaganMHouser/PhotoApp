@@ -27,7 +27,7 @@
 </section>
 <nav class="tabs" id="tabs" role="tablist"><button type="button" role="tab" class="tab on" id="tabAll" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>All</span></button><button type="button" role="tab" class="tab" id="tabCol" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Collections</span></button><button type="button" role="tab" class="tab" id="tabSh" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 13.8c3 .1 5.5 2 5.5 5.2"/></svg><span>Shared with me</span></button></nav>
 <div id="allV"><div id="grid" class="grid"></div></div>
-<div id="shV" hidden><p class="msg" id="shHint" hidden>“Shared with me” needs a quick database update — run migrate-shared-with-me.sql in Supabase.</p><div class="sjlist" id="sjList"></div></div>
+<div id="shV" hidden><p class="msg" id="shHint" hidden>“Shared with me” needs a quick database update — run migrate-shared-with-me.sql in Supabase.</p><button type="button" class="addlink" id="addLink"><span class="pl">+</span> Add a shared link</button><div class="sjlist" id="sjList"></div></div>
 <div id="colV" hidden>
  <h3 class="sec">By month</h3><div class="folders" id="monthF"></div>
  <h3 class="sec">Categories</h3><p class="msg" id="catHint" hidden>Categories need a quick database update — run migrate-categories.sql in Supabase.</p><div class="folders" id="catF"></div>
@@ -52,6 +52,12 @@
 <p class="msg" id="shMsg"></p>
 <div class="row"><button type="button" id="shClose">Done</button></div></div></dialog>
 <section id="naV" hidden><div class="login na"><h1>Not available</h1><p>This page isn't being shared right now, or the link has changed. Ask the owner for a new link.</p></div></section>
+<dialog id="linkD"><form class="form" id="linkF"><h2>Add a shared link</h2>
+<p class="msg">Paste the link someone sent you (it has <b>#share=</b> in it). Handy when the link opened in Safari instead of this app.</p>
+<div class="cpadd"><input type="text" id="linkIn" placeholder="https://…#share=…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="Shared link"><button type="button" id="linkPaste" hidden>Paste</button></div>
+<div class="msg lerr" id="linkMsg" role="status"></div>
+<div class="row"><button type="button" id="linkCancel">Cancel</button><button class="primary" type="submit" id="linkGo">Add</button></div></form></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
 <dialog id="menuD" class="sheet"><div class="sheetb">
  <button type="button" id="mProfile">Edit profile</button><button type="button" id="mShare">Share my page</button><button type="button" id="mArchive">Archive</button><button type="button" id="exp">Export backup</button>
  <button type="button" id="out" class="danger">Sign out</button><button type="button" id="mClose">Cancel</button></div></dialog>
@@ -80,12 +86,14 @@
 const $=id=>document.getElementById(id);
 if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 const configured=!/YOUR-/.test(window.SUPABASE_URL+window.SUPABASE_ANON_KEY);
-const SHARE_RAW=/(?:^#|&)share=/.test(location.hash),SHARE=(location.hash.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||(SHARE_RAW?"invalid":null),VIEWER=!!SHARE;
-// viewer: a separate anonymous client that never reads/stores the owner's login
-const sb=configured?(VIEWER?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"pj-viewer"}})
- :supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}})):null;
-// in viewer mode, a second client reads the visitor's own saved login (if any) — used only to record the visit
-const authSb=configured&&VIEWER?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}):sb;
+// share token from a hash like "#share=…" (null = not a share link, "invalid" = malformed share link)
+const tokenFromHash=hs=>/(?:^#|&)share=/.test(hs||"")?((hs.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||"invalid"):null;
+let SHARE=tokenFromHash(location.hash),VIEWER=!!SHARE,modeGen=0;
+// owner client: the person's own saved login (also used in viewer mode only to record visits)
+const ownerSb=configured?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+// viewer: a separate anonymous client that never reads/stores the owner's login (created on first use)
+let viewerSb=null;const getViewerSb=()=>viewerSb||(viewerSb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"pj-viewer"}}));
+let sb=configured?(VIEWER?getViewerSb():ownerSb):null;const authSb=ownerSb;
 if(VIEWER)document.documentElement.classList.add("viewer");
 const MAX=8,DEF_TITLE="PHOTO JOURNAL";
 let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true,catsOK=true,archOK=true,tab="all",folder=null,feedFilter=null;
@@ -100,11 +108,12 @@ const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 // dates are stored at local noon so time zones never shift the calendar day
 const fromDate=d=>{const[y,m,da]=d.split("-").map(Number);return new Date(y,m-1,da,12,0,0).toISOString()};
 function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn;if(!signedIn)closeFeed(true)}
-async function onSession(s){user=s&&s.user;profile={title:DEF_TITLE,bio:""};share={ok:false,on:false,token:null};posts=[];folder=null;view(!!user);if(user){if(/^#sign(up|in)/.test(location.hash))history.replaceState(null,"",location.pathname);loadProfile();load();loadShare();
- const ret=takeReturn();if(ret){location.replace(location.pathname+"#share="+ret);location.reload()}}}
+async function onSession(s){if(VIEWER)return;user=s&&s.user;profile={title:DEF_TITLE,bio:""};share={ok:false,on:false,token:null};posts=[];folder=null;view(!!user);if(user){if(/^#sign(up|in)/.test(location.hash))history.replaceState(null,"",location.pathname);loadProfile();load();loadShare();
+ const ret=takeReturn();if(ret){history.pushState(null,"",location.pathname+"#share="+ret);enterViewer(ret)}}}
 if(!sb){view(false);$("lmsg").textContent="Not configured yet: add your Supabase URL and anon key to config.js.";$("loginF").querySelectorAll("button,input").forEach(e=>e.disabled=true)}
-else if(VIEWER){startViewer()}
-else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})}
+else{let ownerStarted=false;window.startOwner=()=>{if(ownerStarted){ownerSb.auth.getSession().then(({data})=>onSession(data.session));return}ownerStarted=true;
+  ownerSb.auth.getSession().then(({data})=>onSession(data.session));ownerSb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})};
+ if(VIEWER)startViewer();else startOwner()}
 /* ---------- sign in / sign up ---------- */
 let signup=false;
 function setMode(s){signup=s;$("lgo").textContent=s?"Create account":"Sign in";$("pw2").hidden=!s;$("pw2").required=s;$("magic").hidden=s;$("lsub").hidden=!s;
@@ -140,7 +149,7 @@ $("out").onclick=async()=>{$("menuD").close();await sb.auth.signOut();user=null;
 /* ---------- profile ---------- */
 function drawProfile(){$("pTitle").textContent=(profile.title||DEF_TITLE).toUpperCase();$("pBio").textContent=profile.bio||"";$("pBio").hidden=!profile.bio;
  $("pHint").hidden=profileOK;$("pHint").textContent=profileOK?"":"Profile isn't syncing yet — run migrate-profile.sql in Supabase."}
-async function loadProfile(){drawProfile();const{data,error}=await sb.from("profiles").select("title,bio").eq("user_id",user.id).maybeSingle();
+async function loadProfile(){drawProfile();const g=modeGen;const{data,error}=await sb.from("profiles").select("title,bio").eq("user_id",user.id).maybeSingle();if(g!==modeGen||VIEWER)return;
  if(error){profileOK=false;console.warn("profiles:",error.message)}else{profileOK=true;if(data)profile={title:data.title||DEF_TITLE,bio:data.bio||""}}drawProfile()}
 $("mProfile").onclick=()=>{$("menuD").close();$("prTitle").value=profile.title||DEF_TITLE;$("prBio").value=profile.bio||"";$("prMsg").textContent=profileOK?"":"Profile table missing: changes will only show until you reload. Run migrate-profile.sql.";$("profD").showModal()};
 if(!VIEWER)$("pTitle").onclick=$("mProfile").onclick;
@@ -152,7 +161,7 @@ $("profF").onsubmit=async e=>{e.preventDefault();const p={title:($("prTitle").va
 
 /* ---------- posts ---------- */
 async function load(){$("count").textContent="Loading…";
- const{data,error}=await sb.from("posts").select("*").eq("user_id",user.id).order("created_at",{ascending:false});
+ const g=modeGen;const{data,error}=await sb.from("posts").select("*").eq("user_id",user.id).order("created_at",{ascending:false});if(g!==modeGen||VIEWER)return;
  if(error){$("count").textContent="Error: "+error.message;return}
  {const pr=await sb.from("posts").select("categories").limit(1);catsOK=!pr.error;if(pr.error)console.warn("categories:",pr.error.message)}
  {sb.rpc("get_my_shared_journals").then(({error})=>{sharedOK=!error;$("tabSh").hidden=!sharedOK;$("sHint").hidden=sharedOK||VIEWER;if(error)console.warn("shared:",error.message)})}
@@ -160,7 +169,7 @@ async function load(){$("count").textContent="Loading…";
  posts=data;await signPosts(posts);
  render()}
 /* ---------- signed URLs: per-item errors, batching, refresh before expiry ---------- */
-const SIGN_TTL=VIEWER?600:3600,SIGN_REFRESH=VIEWER?8*60*1000:45*60*1000;let signedAt=0;
+let SIGN_TTL=VIEWER?600:3600,SIGN_REFRESH=VIEWER?8*60*1000:45*60*1000;let signedAt=0;
 async function signPaths(paths){const m={};for(let i=0;i<paths.length;i+=100){const chunk=paths.slice(i,i+100);
   const{data,error}=await sb.storage.from("photos").createSignedUrls(chunk,SIGN_TTL);if(error){console.warn("sign:",error.message);continue}
   (data||[]).forEach((x,k)=>{if(x&&x.signedUrl&&!x.error)m[chunk[k]]=x.signedUrl;else console.warn("photo not found:",chunk[k],x&&x.error)})}return m}
@@ -354,17 +363,38 @@ $("shCopy").onclick=async()=>{const v=$("shLink").value;try{await navigator.clip
 $("shNative").onclick=async()=>{try{await navigator.share({title:(profile.title||DEF_TITLE),url:$("shLink").value})}catch{}};
 
 /* ---------- viewer (read-only, no login) ---------- */
-function notAvailable(){$("loginV").hidden=true;$("appV").hidden=true;$("naV").hidden=false}
-async function startViewer(){$("loginV").hidden=true;
+function notAvailable(){if(!VIEWER)return;$("loginV").hidden=true;$("appV").hidden=true;$("naV").hidden=false}
+async function startViewer(){const g=modeGen,stale=()=>g!==modeGen||!VIEWER;$("loginV").hidden=true;
  let me=null;try{const{data}=await authSb.auth.getSession();me=data&&data.session&&data.session.user}catch{}
+ if(stale())return;
  if(me){$("myBar").hidden=false}else if(!sessionStorage.getItem("pj-mk-x"))$("mkB").hidden=false;
- const pr=await sb.rpc("get_shared_profile",{p_token:SHARE});const row=pr.data&&pr.data[0];
+ const pr=await sb.rpc("get_shared_profile",{p_token:SHARE});if(stale())return;const row=pr.data&&pr.data[0];
  if(pr.error||!row){if(pr.error)console.warn("share:",pr.error.message);return notAvailable()}
  profile={title:row.title||DEF_TITLE,bio:row.bio||""};profileOK=true;$("appV").hidden=false;drawProfile();$("count").textContent="Loading…";
- const{data,error}=await sb.rpc("get_shared_posts",{p_token:SHARE});if(error){console.warn("share:",error.message);return notAvailable()}
- posts=(data||[]).filter(p=>p.archived!==true);catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);render();
+ const{data,error}=await sb.rpc("get_shared_posts",{p_token:SHARE});if(stale())return;if(error){console.warn("share:",error.message);return notAvailable()}
+ posts=(data||[]).filter(p=>p.archived!==true);catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);if(stale())return;render();
  if(me){const{data:rec,error:re}=await authSb.rpc("record_shared_view",{p_token:SHARE});if(re)console.warn("shared_views:",re.message);
   $("myNote").textContent=re?"":rec?"Saved to Shared with me":"This is your page"}}
+/* ---------- paste a shared link (iPhone links open in Safari, not the home-screen app) ---------- */
+// accepts a full URL from any host containing share=<token> (in # or ?), or a bare token
+function parseShareInput(s){s=(s||"").trim().replace(/^<|>$/g,"");if(!s)return null;
+ const m=s.match(/[#?&]share=([^&#\s]+)/);let t=m?m[1]:s;try{t=decodeURIComponent(t)}catch{}t=t.trim();
+ return /^[A-Za-z0-9_-]{32,128}$/.test(t)?t:null}
+window.parseShareInput=parseShareInput;
+let toastT=0;function toast(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3200)}
+$("addLink").onclick=()=>{$("linkIn").value="";$("linkMsg").textContent="";$("linkGo").disabled=false;$("linkPaste").hidden=!(navigator.clipboard&&navigator.clipboard.readText);$("linkD").showModal();setTimeout(()=>$("linkIn").focus(),50)};
+$("linkCancel").onclick=()=>$("linkD").close();
+$("linkPaste").onclick=async()=>{try{const t=await navigator.clipboard.readText();$("linkIn").value=(t||"").trim();$("linkMsg").textContent=parseShareInput(t)?"":"That doesn't look like a share link — it should contain #share=."}catch{$("linkMsg").textContent="Couldn't read the clipboard — long-press the box and choose Paste."}};
+$("linkF").onsubmit=async e=>{e.preventDefault();if(!user)return;const tok=parseShareInput($("linkIn").value);
+ if(!tok)return $("linkMsg").textContent="That doesn't look like a share link — it should contain #share= followed by a long code.";
+ if(share.token&&tok===share.token)return $("linkMsg").textContent="That's your own journal's link — it doesn't need to go in Shared with me.";
+ $("linkGo").disabled=true;$("linkMsg").textContent="Checking…";
+ const{data:ok,error}=await sb.rpc("record_shared_view",{p_token:tok});$("linkGo").disabled=false;
+ if(error){console.warn("record:",error.message);return $("linkMsg").textContent=/function|does not exist|schema cache/i.test(error.message)?"“Shared with me” needs a quick database update — run migrate-shared-with-me.sql in Supabase.":"Couldn't add it right now — please try again."}
+ if(!ok){const own=await sb.from("profiles").select("share_token").eq("user_id",user.id).maybeSingle();
+  return $("linkMsg").textContent=own.data&&own.data.share_token===tok?"That's your own journal's link — it doesn't need to go in Shared with me.":"That link isn't working — it may be turned off or reset. Ask them for a fresh link."}
+ let title="";try{const pr=await sb.rpc("get_shared_profile",{p_token:tok});title=pr.data&&pr.data[0]&&pr.data[0].title||""}catch{}
+ $("linkD").close();toast("Added "+(title?"“"+title.toUpperCase()+"”":"journal")+" to Shared with me");setTab("sh")};
 /* ---------- return-to-shared-page after sign in ---------- */
 function setReturn(t){localStorage.setItem("pj-return",JSON.stringify({t,at:Date.now()}))}
 function takeReturn(){try{const r=JSON.parse(localStorage.getItem("pj-return")||"null");localStorage.removeItem("pj-return");return r&&Date.now()-r.at<86400000&&/^[A-Za-z0-9_-]{32,}$/.test(r.t)?r.t:null}catch{return null}}
@@ -376,7 +406,7 @@ const ago=t=>{const s=(Date.now()-Date.parse(t))/1000;if(s<60)return"just now";c
 async function loadShared(){if(!user)return;const L=$("sjList");L.innerHTML='<p class="msg">Loading…</p>';
  const{data,error}=await sb.rpc("get_my_shared_journals");sharedOK=!error;$("shHint").hidden=sharedOK;
  if(error){console.warn("shared:",error.message);L.innerHTML="";return}
- const rows=(data||[]).slice().sort((x,y)=>Date.parse(y.last_viewed_at)-Date.parse(x.last_viewed_at));if(!rows.length){L.innerHTML='<div class="empty">No shared journals yet.<br>When someone sends you the link to their journal and you open it while signed in, it shows up here.</div>';return}
+ const rows=(data||[]).slice().sort((x,y)=>Date.parse(y.last_viewed_at)-Date.parse(x.last_viewed_at));if(!rows.length){L.innerHTML='<div class="empty">No shared journals yet.<br>When someone sends you their journal link, tap <b>+ Add a shared link</b> above and paste it — or open the link while signed in here.</div>';return}
  const paths=rows.map(r=>r.cover_path).filter(Boolean),m=paths.length?await signPaths(paths):{};L.innerHTML="";
  rows.forEach(r=>{const a=document.createElement("div");a.className="sj";a.innerHTML='<a class="sjopen"><div class="sjcov"></div><div class="sjtx"><div class="sjt"></div><div class="sjm"></div></div></a><button type="button" class="icon sjx" aria-label="Options">⋯</button>';
   const link=a.querySelector(".sjopen");link.href=location.pathname+"#share="+r.share_token;
@@ -385,13 +415,27 @@ async function loadShared(){if(!user)return;const L=$("sjList");L.innerHTML='<p 
   a.querySelector(".sjx").onclick=async()=>{if(!confirm("Remove “"+(r.title||DEF_TITLE)+"” from Shared with me? You can add it back by opening their link again."))return;
    const{error}=await sb.from("shared_views").delete().eq("viewer_id",user.id).eq("share_token",r.share_token);if(error)return alert(error.message);a.remove();if(!L.children.length)loadShared()};
   L.appendChild(a)})}
-$("myBack").onclick=e=>{e.preventDefault();location.replace(location.pathname);location.reload()};
-addEventListener("hashchange",()=>{const t=(location.hash.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||null;if(t!==SHARE)location.reload()});
+/* ---------- switching between viewer mode and the owner's app, without reloading ----------
+   (v11 bug: "My journal" did location.replace(path) immediately followed by location.reload();
+   removing a #fragment is a full navigation, and the reload re-loaded the still-current
+   #share=… URL, cancelling it — so tapping did nothing visible, notably on iOS.) */
+function resetUI(){closeFeed(true);document.querySelectorAll("dialog[open]").forEach(d=>d.close());posts=[];folder=null;feedFilter=null;cur=null;
+ profile={title:DEF_TITLE,bio:""};catsOK=true;archOK=true;$("grid").innerHTML="";$("fgrid").innerHTML="";$("feed").innerHTML="";
+ ["naV","mkB","myBar","appV"].forEach(id=>$(id).hidden=true);$("myNote").textContent="";setTab("all");scrollTo(0,0)}
+function setViewerMode(on,token){modeGen++;VIEWER=on;SHARE=on?token:null;SIGN_TTL=on?600:3600;SIGN_REFRESH=on?8*60*1000:45*60*1000;signedAt=0;
+ document.documentElement.classList.toggle("viewer",on);sb=on?getViewerSb():ownerSb}
+function enterViewer(token){if(!configured)return;resetUI();setViewerMode(true,token);user=null;startViewer()}
+function exitViewer(){if(!configured)return;resetUI();setViewerMode(false,null);user=null;startOwner()}
+function goMyJournal(){try{history.replaceState(null,"",location.pathname+location.search)}catch{location.href=location.pathname;return}exitViewer()}
+$("myBack").onclick=e=>{e.preventDefault();goMyJournal()};
+// opening a share link while the app is open, and browser back/forward between shared and own pages
+function syncHash(){const t=tokenFromHash(location.hash);if(t&&t!==SHARE)enterViewer(t);else if(!t&&VIEWER)exitViewer()}
+addEventListener("hashchange",syncHash);addEventListener("popstate",()=>setTimeout(syncHash,0));
 
 $("mkX").onclick=()=>{$("mkB").hidden=true;sessionStorage.setItem("pj-mk-x","1")};
 // leave viewer mode completely: full reload with the normal client on the sign-up screen
-$("mkIn").onclick=e=>{e.preventDefault();setReturn(SHARE);location.replace(location.pathname+"#signin");location.reload()};
-$("mkGo").onclick=e=>{e.preventDefault();setReturn(SHARE);location.replace(location.pathname+"#signup");location.reload()};
+$("mkIn").onclick=e=>{e.preventDefault();setReturn(SHARE);history.replaceState(null,"",location.pathname+"#signin");exitViewer();setMode(false)};
+$("mkGo").onclick=e=>{e.preventDefault();setReturn(SHARE);history.replaceState(null,"",location.pathname+"#signup");exitViewer();setMode(true)};
 /* ---------- export ---------- */
 const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
 $("exp").onclick=async()=>{$("menuD").close();if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];

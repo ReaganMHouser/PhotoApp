@@ -12,6 +12,8 @@
   --feed-max:614px;--feed-bar-h:52px;--feed-car-h:min(100vw,72vh,614px);--feed-gap:28px;--feed-bg:var(--bg);
   /* sheets */
   --sheet-max:420px;
+  /* add-link + toast */
+  --toast-bg:rgba(40,30,22,.92);--toast-ink:#fff;--toast-bottom:calc(var(--fab-bottom) + var(--fab-size) + 14px);
   /* shared with me */
   --sj-cover:64px;--sj-radius:12px;--sj-gap:12px;--mybar-h:44px;--mybar-bg:rgba(255,255,254,.94);
   /* sign-up banner */
@@ -198,3 +200,11 @@ dialog.sheet{max-width:var(--sheet-max);margin:auto auto calc(var(--space-md) + 
 .sjtx{min-width:0}.sjt{font-weight:var(--title-weight);letter-spacing:var(--title-track);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sjm{color:var(--muted);font-size:13px}
 .viewer #tabSh{display:none!important}
+
+/* --- v12: add a shared link, toast --- */
+.addlink{display:flex;align-items:center;justify-content:center;gap:var(--space-xs);width:100%;margin-top:var(--space-sm);padding:var(--space-sm);border:1.5px dashed var(--line);border-radius:var(--sj-radius);background:transparent;color:var(--accent);font-weight:600}
+.addlink:hover{border-color:var(--accent)}.addlink .pl{font-size:20px;line-height:1}
+.viewer .addlink{display:none!important}
+#linkD .cpadd input{font-size:16px} /* 16px avoids iOS zoom-on-focus */
+.lerr{color:var(--ink)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--toast-bottom) + env(safe-area-inset-bottom));z-index:30;max-width:calc(100vw - 32px);background:var(--toast-bg);color:var(--toast-ink);padding:10px 16px;border-radius:var(--radius-pill);font-size:14px;box-shadow:var(--fab-shadow);text-align:center}
