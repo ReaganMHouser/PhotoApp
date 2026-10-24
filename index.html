@@ -16,16 +16,18 @@
 <input id="pw2" type="password" placeholder="Confirm password" autocomplete="new-password" hidden>
 <button class="primary" type="submit" id="lgo">Sign in</button><button type="button" id="magic">Email me a sign-in link</button><div class="msg" id="lmsg" role="status"></div>
 <button type="button" class="linkbtn" id="lmode">New here? Create an account</button></form></section>
-<div class="mkbanner" id="mkB" hidden><span>Make your own photo journal</span><a class="btn primary" id="mkGo" href="./#signup">Create yours</a><button type="button" class="icon" id="mkX" aria-label="Dismiss">×</button></div>
+<div class="mkbanner" id="mkB" hidden><span>Sign in to save this journal to <b>Shared with me</b>, or make your own.</span><div class="mkbtns"><a class="btn" id="mkIn" href="./#signin">Sign in</a><a class="btn primary" id="mkGo" href="./#signup">Create yours</a></div><button type="button" class="icon" id="mkX" aria-label="Dismiss">×</button></div>
+<div class="mybar" id="myBar" hidden><a href="./" id="myBack">‹ My journal</a><span class="msg" id="myNote"></span></div>
 <section id="appV" hidden>
 <main>
 <section class="profile">
  <div class="ptop"><h1 class="ptitle" id="pTitle">PHOTO JOURNAL</h1><button type="button" class="icon" id="menuBtn" aria-label="Menu" aria-haspopup="true">⋯</button></div>
  <p class="bio" id="pBio"></p>
- <p class="count" id="count"></p><p class="msg" id="aHint" hidden>Archive needs a quick database update — run migrate-archive.sql in Supabase.</p><p class="msg" id="pHint" hidden></p>
+ <p class="count" id="count"></p><p class="msg" id="sHint" hidden>“Shared with me” needs a quick database update — run migrate-shared-with-me.sql in Supabase.</p><p class="msg" id="aHint" hidden>Archive needs a quick database update — run migrate-archive.sql in Supabase.</p><p class="msg" id="pHint" hidden></p>
 </section>
-<nav class="tabs" id="tabs" role="tablist"><button type="button" role="tab" class="tab on" id="tabAll" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>All</span></button><button type="button" role="tab" class="tab" id="tabCol" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Collections</span></button></nav>
+<nav class="tabs" id="tabs" role="tablist"><button type="button" role="tab" class="tab on" id="tabAll" aria-selected="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>All</span></button><button type="button" role="tab" class="tab" id="tabCol" aria-selected="false"><svg viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Collections</span></button><button type="button" role="tab" class="tab" id="tabSh" aria-selected="false"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 13.8c3 .1 5.5 2 5.5 5.2"/></svg><span>Shared with me</span></button></nav>
 <div id="allV"><div id="grid" class="grid"></div></div>
+<div id="shV" hidden><p class="msg" id="shHint" hidden>“Shared with me” needs a quick database update — run migrate-shared-with-me.sql in Supabase.</p><div class="sjlist" id="sjList"></div></div>
 <div id="colV" hidden>
  <h3 class="sec">By month</h3><div class="folders" id="monthF"></div>
  <h3 class="sec">Categories</h3><p class="msg" id="catHint" hidden>Categories need a quick database update — run migrate-categories.sql in Supabase.</p><div class="folders" id="catF"></div>
@@ -82,6 +84,8 @@ const SHARE_RAW=/(?:^#|&)share=/.test(location.hash),SHARE=(location.hash.match(
 // viewer: a separate anonymous client that never reads/stores the owner's login
 const sb=configured?(VIEWER?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"pj-viewer"}})
  :supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,detectSessionInUrl:true}})):null;
+// in viewer mode, a second client reads the visitor's own saved login (if any) — used only to record the visit
+const authSb=configured&&VIEWER?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}):sb;
 if(VIEWER)document.documentElement.classList.add("viewer");
 const MAX=8,DEF_TITLE="PHOTO JOURNAL";
 let user=null,posts=[],cur=null,pending=[],profile={title:DEF_TITLE,bio:""},profileOK=true,catsOK=true,archOK=true,tab="all",folder=null,feedFilter=null;
@@ -96,7 +100,8 @@ const toDate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 // dates are stored at local noon so time zones never shift the calendar day
 const fromDate=d=>{const[y,m,da]=d.split("-").map(Number);return new Date(y,m-1,da,12,0,0).toISOString()};
 function view(signedIn){$("loginV").hidden=signedIn;$("appV").hidden=!signedIn;if(!signedIn)closeFeed(true)}
-async function onSession(s){user=s&&s.user;profile={title:DEF_TITLE,bio:""};share={ok:false,on:false,token:null};posts=[];folder=null;view(!!user);if(user){if(/^#signup/.test(location.hash))history.replaceState(null,"",location.pathname);loadProfile();load();loadShare()}}
+async function onSession(s){user=s&&s.user;profile={title:DEF_TITLE,bio:""};share={ok:false,on:false,token:null};posts=[];folder=null;view(!!user);if(user){if(/^#sign(up|in)/.test(location.hash))history.replaceState(null,"",location.pathname);loadProfile();load();loadShare();
+ const ret=takeReturn();if(ret){location.replace(location.pathname+"#share="+ret);location.reload()}}}
 if(!sb){view(false);$("lmsg").textContent="Not configured yet: add your Supabase URL and anon key to config.js.";$("loginF").querySelectorAll("button,input").forEach(e=>e.disabled=true)}
 else if(VIEWER){startViewer()}
 else{sb.auth.getSession().then(({data})=>onSession(data.session));sb.auth.onAuthStateChange((_e,s)=>{if(!!(s&&s.user)!==!!user)onSession(s)})}
@@ -150,6 +155,7 @@ async function load(){$("count").textContent="Loading…";
  const{data,error}=await sb.from("posts").select("*").eq("user_id",user.id).order("created_at",{ascending:false});
  if(error){$("count").textContent="Error: "+error.message;return}
  {const pr=await sb.from("posts").select("categories").limit(1);catsOK=!pr.error;if(pr.error)console.warn("categories:",pr.error.message)}
+ {sb.rpc("get_my_shared_journals").then(({error})=>{sharedOK=!error;$("tabSh").hidden=!sharedOK;$("sHint").hidden=sharedOK||VIEWER;if(error)console.warn("shared:",error.message)})}
  {const pa=await sb.from("posts").select("archived").limit(1);archOK=!pa.error;if(pa.error)console.warn("archive:",pa.error.message);$("mArchive").hidden=!archOK}
  posts=data;await signPosts(posts);
  render()}
@@ -199,9 +205,9 @@ function renderCollections(){const mf=$("monthF"),cf=$("catF");mf.innerHTML="";c
  allCats().forEach(c=>{const f={type:"cat",name:c};cf.appendChild(card(c,posts.filter(filterFn(f)),()=>openFolder(f)))});
  if(VIEWER)return;const n=card("New category",null,()=>{const v=prompt("Name your category (e.g. a person, place, or trip):");if(!v||!normCat(v))return;const c=normCat(v);if(!allCats().some(x=>same(x,c)))addExtra(c);renderCollections()},"fnew");
  n.querySelector(".fcov").textContent="+";n.querySelector(".fc").textContent="People, places, trips…";cf.appendChild(n)}
-function setTab(t){tab=t;folder=null;$("tabAll").classList.toggle("on",t==="all");$("tabCol").classList.toggle("on",t==="col");$("tabAll").setAttribute("aria-selected",t==="all");$("tabCol").setAttribute("aria-selected",t==="col");showSection()}
-function showSection(){$("allV").hidden=!(tab==="all"&&!folder);$("tabs").hidden=!!(folder&&folder.type==="archive");$("colV").hidden=!(tab==="col"&&!folder);$("folderV").hidden=!folder}
-$("tabAll").onclick=()=>setTab("all");$("tabCol").onclick=()=>setTab("col");
+function setTab(t){tab=t;folder=null;[["tabAll","all"],["tabCol","col"],["tabSh","sh"]].forEach(([id,k])=>{$(id).classList.toggle("on",t===k);$(id).setAttribute("aria-selected",t===k)});showSection();if(t==="sh")loadShared()}
+function showSection(){$("allV").hidden=!(tab==="all"&&!folder);$("tabs").hidden=!!(folder&&folder.type==="archive");$("colV").hidden=!(tab==="col"&&!folder);$("shV").hidden=!(tab==="sh"&&!folder);$("folderV").hidden=!folder}
+$("tabAll").onclick=()=>setTab("all");$("tabSh").onclick=()=>setTab("sh");$("tabCol").onclick=()=>setTab("col");
 let colY=0;
 function openFolder(f){colY=scrollY;folder=f;renderFolder();showSection();$("folderV").scrollIntoView({block:"start"})}
 function renderFolder(){if(!folder)return;if(folder.type==="cat"){const real=allCats().find(c=>same(c,folder.name));if(!real){folder=null;showSection();return}folder.name=real}
@@ -349,17 +355,43 @@ $("shNative").onclick=async()=>{try{await navigator.share({title:(profile.title|
 
 /* ---------- viewer (read-only, no login) ---------- */
 function notAvailable(){$("loginV").hidden=true;$("appV").hidden=true;$("naV").hidden=false}
-async function startViewer(){$("loginV").hidden=true;if(!sessionStorage.getItem("pj-mk-x"))$("mkB").hidden=false;
+async function startViewer(){$("loginV").hidden=true;
+ let me=null;try{const{data}=await authSb.auth.getSession();me=data&&data.session&&data.session.user}catch{}
+ if(me){$("myBar").hidden=false}else if(!sessionStorage.getItem("pj-mk-x"))$("mkB").hidden=false;
  const pr=await sb.rpc("get_shared_profile",{p_token:SHARE});const row=pr.data&&pr.data[0];
  if(pr.error||!row){if(pr.error)console.warn("share:",pr.error.message);return notAvailable()}
  profile={title:row.title||DEF_TITLE,bio:row.bio||""};profileOK=true;$("appV").hidden=false;drawProfile();$("count").textContent="Loading…";
  const{data,error}=await sb.rpc("get_shared_posts",{p_token:SHARE});if(error){console.warn("share:",error.message);return notAvailable()}
- posts=(data||[]).filter(p=>p.archived!==true);catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);render()}
+ posts=(data||[]).filter(p=>p.archived!==true);catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);render();
+ if(me){const{data:rec,error:re}=await authSb.rpc("record_shared_view",{p_token:SHARE});if(re)console.warn("shared_views:",re.message);
+  $("myNote").textContent=re?"":rec?"Saved to Shared with me":"This is your page"}}
+/* ---------- return-to-shared-page after sign in ---------- */
+function setReturn(t){localStorage.setItem("pj-return",JSON.stringify({t,at:Date.now()}))}
+function takeReturn(){try{const r=JSON.parse(localStorage.getItem("pj-return")||"null");localStorage.removeItem("pj-return");return r&&Date.now()-r.at<86400000&&/^[A-Za-z0-9_-]{32,}$/.test(r.t)?r.t:null}catch{return null}}
+/* ---------- Shared with me (owner app) ---------- */
+var sharedOK=true;
+const ago=t=>{const s=(Date.now()-Date.parse(t))/1000;if(s<60)return"just now";const m=s/60,h=m/60,d=h/24;
+ if(m<60)return Math.floor(m)+" min ago";if(h<24){const n=Math.floor(h);return n+(n===1?" hour":" hours")+" ago"}if(d<2)return"yesterday";if(d<30)return Math.floor(d)+" days ago";
+ return new Date(t).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})};
+async function loadShared(){if(!user)return;const L=$("sjList");L.innerHTML='<p class="msg">Loading…</p>';
+ const{data,error}=await sb.rpc("get_my_shared_journals");sharedOK=!error;$("shHint").hidden=sharedOK;
+ if(error){console.warn("shared:",error.message);L.innerHTML="";return}
+ const rows=(data||[]).slice().sort((x,y)=>Date.parse(y.last_viewed_at)-Date.parse(x.last_viewed_at));if(!rows.length){L.innerHTML='<div class="empty">No shared journals yet.<br>When someone sends you the link to their journal and you open it while signed in, it shows up here.</div>';return}
+ const paths=rows.map(r=>r.cover_path).filter(Boolean),m=paths.length?await signPaths(paths):{};L.innerHTML="";
+ rows.forEach(r=>{const a=document.createElement("div");a.className="sj";a.innerHTML='<a class="sjopen"><div class="sjcov"></div><div class="sjtx"><div class="sjt"></div><div class="sjm"></div></div></a><button type="button" class="icon sjx" aria-label="Options">⋯</button>';
+  const link=a.querySelector(".sjopen");link.href=location.pathname+"#share="+r.share_token;
+  a.querySelector(".sjt").textContent=(r.title||DEF_TITLE).toUpperCase();a.querySelector(".sjm").textContent=r.post_count+(r.post_count==1?" post":" posts")+" · viewed "+ago(r.last_viewed_at);
+  const u=r.cover_path&&m[r.cover_path];if(u){const i=new Image();i.src=u;i.alt="";i.loading="lazy";i.onerror=()=>i.remove();a.querySelector(".sjcov").appendChild(i)}
+  a.querySelector(".sjx").onclick=async()=>{if(!confirm("Remove “"+(r.title||DEF_TITLE)+"” from Shared with me? You can add it back by opening their link again."))return;
+   const{error}=await sb.from("shared_views").delete().eq("viewer_id",user.id).eq("share_token",r.share_token);if(error)return alert(error.message);a.remove();if(!L.children.length)loadShared()};
+  L.appendChild(a)})}
+$("myBack").onclick=e=>{e.preventDefault();location.replace(location.pathname);location.reload()};
 addEventListener("hashchange",()=>{const t=(location.hash.match(/(?:^#|&)share=([A-Za-z0-9_-]{32,})/)||[])[1]||null;if(t!==SHARE)location.reload()});
 
 $("mkX").onclick=()=>{$("mkB").hidden=true;sessionStorage.setItem("pj-mk-x","1")};
 // leave viewer mode completely: full reload with the normal client on the sign-up screen
-$("mkGo").onclick=e=>{e.preventDefault();location.replace(location.pathname+"#signup");location.reload()};
+$("mkIn").onclick=e=>{e.preventDefault();setReturn(SHARE);location.replace(location.pathname+"#signin");location.reload()};
+$("mkGo").onclick=e=>{e.preventDefault();setReturn(SHARE);location.replace(location.pathname+"#signup");location.reload()};
 /* ---------- export ---------- */
 const b64=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
 $("exp").onclick=async()=>{$("menuD").close();if(!posts.length)return alert("Nothing to export yet.");$("exp").disabled=true;const out=[];

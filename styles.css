@@ -12,6 +12,8 @@
   --feed-max:614px;--feed-bar-h:52px;--feed-car-h:min(100vw,72vh,614px);--feed-gap:28px;--feed-bg:var(--bg);
   /* sheets */
   --sheet-max:420px;
+  /* shared with me */
+  --sj-cover:64px;--sj-radius:12px;--sj-gap:12px;--mybar-h:44px;--mybar-bg:rgba(255,255,254,.94);
   /* sign-up banner */
   --banner-bg:var(--accent);--banner-ink:#fff;--banner-h:46px;
   /* archive */
@@ -178,3 +180,21 @@ dialog.sheet{max-width:var(--sheet-max);margin:auto auto calc(var(--space-md) + 
 .viewer .mkbanner~#appV .profile{padding-top:var(--space-sm)}
 .linkbtn{border:0;background:none;color:var(--accent);padding:4px;text-decoration:underline;font-size:14px}
 .lsub{text-align:center;margin:-4px 0 4px}
+
+/* --- v11: shared with me --- */
+.tab span{white-space:nowrap}
+@media(max-width:420px){.tab{font-size:11px;letter-spacing:.04em;gap:4px}.tab svg{width:18px;height:18px}}
+.tab svg circle{fill:none}
+.mkbtns{display:flex;gap:var(--space-xs);flex:none}
+.mkbanner .btn:not(.primary){background:transparent;color:var(--banner-ink);border-color:var(--banner-ink)}
+@media(max-width:420px){.mkbanner{flex-wrap:wrap}.mkbanner span{flex-basis:calc(100% - 40px)}}
+.mybar{position:sticky;top:0;z-index:15;display:flex;align-items:center;gap:var(--space-sm);min-height:var(--mybar-h);padding:env(safe-area-inset-top) var(--space-md) 0;background:var(--mybar-bg);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.mybar a{color:var(--accent);font-weight:600;text-decoration:none}.mybar .msg{margin-left:auto;min-height:0}
+.sjlist{display:flex;flex-direction:column;gap:var(--sj-gap);padding-top:var(--space-sm)}
+.sj{display:flex;align-items:center;gap:var(--space-sm)}
+.sjopen{flex:1;min-width:0;display:flex;align-items:center;gap:var(--space-sm);color:inherit;text-decoration:none}
+.sjcov{width:var(--sj-cover);height:var(--sj-cover);border-radius:var(--sj-radius);overflow:hidden;background:var(--folder-cover-bg);flex:none}
+.sjcov img{width:100%;height:100%;object-fit:cover;display:block}
+.sjtx{min-width:0}.sjt{font-weight:var(--title-weight);letter-spacing:var(--title-track);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sjm{color:var(--muted);font-size:13px}
+.viewer #tabSh{display:none!important}
