@@ -12,6 +12,8 @@
   --feed-max:614px;--feed-bar-h:52px;--feed-car-h:min(100vw,72vh,614px);--feed-gap:28px;--feed-bg:var(--bg);
   /* sheets */
   --sheet-max:420px;
+  /* custom covers */
+  --cov-prev:84px;--pick-gap:3px;
   /* add-link + toast */
   --toast-bg:rgba(40,30,22,.92);--toast-ink:#fff;--toast-bottom:calc(var(--fab-bottom) + var(--fab-size) + 14px);
   /* shared with me */
@@ -208,3 +210,19 @@ dialog.sheet{max-width:var(--sheet-max);margin:auto auto calc(var(--space-md) + 
 #linkD .cpadd input{font-size:16px} /* 16px avoids iOS zoom-on-focus */
 .lerr{color:var(--ink)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--toast-bottom) + env(safe-area-inset-bottom));z-index:30;max-width:calc(100vw - 32px);background:var(--toast-bg);color:var(--toast-ink);padding:10px 16px;border-radius:var(--radius-pill);font-size:14px;box-shadow:var(--fab-shadow);text-align:center}
+
+/* --- v13: private nicknames for shared journals --- */
+.sjt.nick{text-transform:none;letter-spacing:normal}
+#renIn{font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);width:100%}
+.renrow{align-items:center}.renrow .sp{flex:1}.renrow .linkbtn{padding-left:0}
+
+/* --- v14: custom covers --- */
+.cpl{font-size:13px;color:var(--muted);font-weight:600}.cpl .msg{font-weight:normal}
+.covrow{display:flex;gap:var(--space-sm);align-items:center}
+.covprev{width:var(--cov-prev);height:var(--cov-prev);border-radius:var(--sj-radius);overflow:hidden;background:var(--folder-cover-bg);flex:none;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:var(--font-xs)}
+.covprev img{width:100%;height:100%;object-fit:cover;display:block}
+.covbtns{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-xs);min-width:0}
+.covbtns button:not(.linkbtn){padding:6px 12px;font-size:14px}.covbtns .linkbtn{padding:2px 0}
+.pickgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--pick-gap);max-height:60vh;overflow-y:auto;border-radius:var(--radius-sm)}
+.pickgrid button{padding:0;border:0;border-radius:0;aspect-ratio:1;overflow:hidden;background:var(--line)}
+.pickgrid img{width:100%;height:100%;object-fit:cover;display:block}

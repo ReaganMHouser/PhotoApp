@@ -52,6 +52,21 @@
 <p class="msg" id="shMsg"></p>
 <div class="row"><button type="button" id="shClose">Done</button></div></div></dialog>
 <section id="naV" hidden><div class="login na"><h1>Not available</h1><p>This page isn't being shared right now, or the link has changed. Ask the owner for a new link.</p></div></section>
+<dialog id="sjD" class="sheet"><div class="sheetb">
+ <button type="button" id="sjRen">Edit name &amp; cover</button><button type="button" id="sjDel" class="danger">Remove from list</button><button type="button" id="sjClose">Cancel</button></div></dialog>
+<dialog id="renD"><form class="form" id="renF"><h2>Edit</h2>
+<p class="msg">Only you see these changes — handy for remembering whose page is whose.</p>
+<div class="cpl">Cover photo</div>
+<div class="covrow"><div class="covprev" id="covPrev"></div><div class="covbtns">
+ <button type="button" id="covUp">Upload a photo</button><button type="button" id="covPick">Choose from their posts</button><button type="button" class="linkbtn" id="covDef">Use default cover</button></div></div>
+<input type="file" id="covFile" accept="image/*" hidden>
+<div class="msg lerr" id="covMsg" role="status"></div>
+<div class="cpl">Name <span class="msg" id="renOrig"></span></div>
+<input type="text" id="renIn" maxlength="40" autocomplete="off" enterkeyhint="done" aria-label="Nickname">
+<div class="msg lerr" id="renMsg" role="status"></div>
+<div class="row renrow"><button type="button" class="linkbtn" id="renReset">Use original name</button><span class="sp"></span><button type="button" id="renCancel">Cancel</button><button class="primary" type="submit" id="renGo">Save</button></div></form></dialog>
+<dialog id="pickD"><div class="form"><h2>Choose a cover</h2><p class="msg" id="pickMsg">Loading their photos…</p><div class="pickgrid" id="pickGrid"></div>
+<div class="row"><button type="button" id="pickCancel">Cancel</button></div></div></dialog>
 <dialog id="linkD"><form class="form" id="linkF"><h2>Add a shared link</h2>
 <p class="msg">Paste the link someone sent you (it has <b>#share=</b> in it). Handy when the link opened in Safari instead of this app.</p>
 <div class="cpadd"><input type="text" id="linkIn" placeholder="https://…#share=…" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="Shared link"><button type="button" id="linkPaste" hidden>Paste</button></div>
@@ -374,7 +389,7 @@ async function startViewer(){const g=modeGen,stale=()=>g!==modeGen||!VIEWER;$("l
  const{data,error}=await sb.rpc("get_shared_posts",{p_token:SHARE});if(stale())return;if(error){console.warn("share:",error.message);return notAvailable()}
  posts=(data||[]).filter(p=>p.archived!==true);catsOK=posts.every(p=>Array.isArray(p.categories));await signPosts(posts);if(stale())return;render();
  if(me){const{data:rec,error:re}=await authSb.rpc("record_shared_view",{p_token:SHARE});if(re)console.warn("shared_views:",re.message);
-  $("myNote").textContent=re?"":rec?"Saved to Shared with me":"This is your page"}}
+  $("myNote").textContent=re?"":rec?(nickByToken[SHARE]?"Saved as “"+nickByToken[SHARE]+"”":"Saved to Shared with me"):"This is your page"}}
 /* ---------- paste a shared link (iPhone links open in Safari, not the home-screen app) ---------- */
 // accepts a full URL from any host containing share=<token> (in # or ?), or a bare token
 function parseShareInput(s){s=(s||"").trim().replace(/^<|>$/g,"");if(!s)return null;
@@ -403,17 +418,59 @@ var sharedOK=true;
 const ago=t=>{const s=(Date.now()-Date.parse(t))/1000;if(s<60)return"just now";const m=s/60,h=m/60,d=h/24;
  if(m<60)return Math.floor(m)+" min ago";if(h<24){const n=Math.floor(h);return n+(n===1?" hour":" hours")+" ago"}if(d<2)return"yesterday";if(d<30)return Math.floor(d)+" days ago";
  return new Date(t).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"})};
+/* ---------- per-card menu: rename (private nickname) / remove ---------- */
+const NICK_MAX=40;let sjCur=null;var nickByToken={};
+$("sjClose").onclick=()=>$("sjD").close();
+$("sjDel").onclick=async()=>{$("sjD").close();const{r,el,nick,orig}=sjCur;if(!confirm("Remove “"+(nick||orig)+"” from Shared with me? You can add it back by opening their link again."))return;
+ const{error}=await sb.from("shared_views").delete().eq("viewer_id",user.id).eq("share_token",r.share_token);if(error)return alert(error.message);if(r.my_cover_path)sb.storage.from("photos").remove([r.my_cover_path]).catch(()=>{});el.remove();if(!$("sjList").children.length)loadShared()};
+$("sjRen").onclick=()=>{$("sjD").close();drawCovPrev();$("covMsg").textContent="";$("renIn").value=sjCur.nick||sjCur.orig;$("renOrig").textContent="· original: "+sjCur.orig;$("renMsg").textContent="";$("renGo").disabled=false;$("renReset").hidden=!sjCur.nick;$("renD").showModal();setTimeout(()=>{$("renIn").focus();$("renIn").select()},50)};
+$("renCancel").onclick=()=>$("renD").close();
+async function saveNick(v){v=(v||"").replace(/\s+/g," ").trim().slice(0,NICK_MAX);if(v.toUpperCase()===sjCur.orig)v="";if(v===(sjCur.nick||"")){$("renD").close();return}
+ $("renGo").disabled=true;$("renMsg").textContent="Saving…";const{error}=await sb.rpc("rename_shared_journal",{p_token:sjCur.r.share_token,p_nickname:v});$("renGo").disabled=false;
+ if(error){console.warn("rename:",error.message);return $("renMsg").textContent=/function|does not exist|schema cache|nickname/i.test(error.message)?"Renaming needs a quick database update — run migrate-rename-shared.sql in Supabase.":"Couldn't save right now — please try again."}
+ $("renD").close();toast(v?"Renamed to “"+v+"”":"Back to “"+sjCur.orig+"”");loadShared()}
+$("renF").onsubmit=e=>{e.preventDefault();saveNick($("renIn").value)};
+$("renReset").onclick=()=>saveNick("");
+/* ---------- private custom cover (upload or one of their posts) ---------- */
+function drawCovPrev(){const p=$("covPrev");p.innerHTML="";if(sjCur.covUrl){const i=new Image();i.src=sjCur.covUrl;i.alt="Current cover";p.appendChild(i)}else p.textContent="No photo";
+ $("covDef").hidden=!sjCur.custom}
+const covErr=e=>/function|does not exist|schema cache|cover/i.test(e&&e.message||"")?"Custom covers need a quick database update — run migrate-shared-covers.sql in Supabase.":"Couldn't save the cover — please try again.";
+function covBusy(on,msg){["covUp","covPick","covDef"].forEach(id=>$(id).disabled=on);$("covMsg").textContent=msg||""}
+async function setCover(kind,path,url){const old=sjCur.r.my_cover_path||null;
+ const{data:ok,error}=await sb.rpc("set_shared_cover",{p_token:sjCur.r.share_token,p_kind:kind,p_path:path});
+ if(error||!ok){console.warn("cover:",error&&error.message);return error?covErr(error):"That photo can't be used as a cover (it may no longer be shared)."}
+ if(old&&old!==path)sb.storage.from("photos").remove([old]).catch(()=>{}); // best effort: drop the replaced upload
+ sjCur.r.my_cover_path=kind==="upload"?path:null;sjCur.r.owner_cover_path=kind==="post"?path:null;sjCur.custom=kind!=="default";sjCur.covUrl=url||"";
+ drawCovPrev();loadShared();return null}
+$("covUp").onclick=()=>$("covFile").click();
+$("covFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f||!user)return;covBusy(true,"Preparing photo…");let path=null;
+ try{const blob=await resize(f);if(!blob||blob.size<MIN_BLOB)throw new Error("That photo didn't process correctly — please try another.");
+  path=user.id+"/covers/"+crypto.randomUUID()+".jpg";covBusy(true,"Uploading…");
+  const up=await sb.storage.from("photos").upload(path,blob,{contentType:"image/jpeg"});if(up.error)throw new Error("Upload failed: "+up.error.message);
+  const err=await setCover("upload",path,URL.createObjectURL(blob));if(err){sb.storage.from("photos").remove([path]).catch(()=>{});throw new Error(err)}
+  covBusy(false,"");toast("Cover updated")}catch(x){covBusy(false,x.message)}};
+$("covDef").onclick=async()=>{covBusy(true,"Saving…");const err=await setCover("default",null,"");covBusy(false,err||"");if(!err){toast("Using the default cover");loadShared()}};
+$("covPick").onclick=async()=>{const g=$("pickGrid");g.innerHTML="";$("pickMsg").textContent="Loading their photos…";$("pickD").showModal();
+ const{data,error}=await sb.rpc("get_shared_posts",{p_token:sjCur.r.share_token});
+ if(error||!data){$("pickMsg").textContent="Couldn't load their posts right now.";return}
+ const list=data.filter(p=>p.archived!==true),paths=[...new Set(list.flatMap(pathsOf))].slice(0,120);
+ if(!paths.length){$("pickMsg").textContent="They don't have any posts yet.";return}
+ const m=await signPaths(paths);$("pickMsg").textContent="Tap a photo to use it as the cover.";
+ paths.forEach(k=>{if(!m[k])return;const b=document.createElement("button");b.type="button";const i=new Image();i.src=m[k];i.alt="";i.loading="lazy";i.onerror=()=>b.remove();b.appendChild(i);
+  b.onclick=async()=>{$("pickD").close();covBusy(true,"Saving…");const err=await setCover("post",k,m[k]);covBusy(false,err||"");if(!err)toast("Cover updated")};g.appendChild(b)})};
+$("pickCancel").onclick=()=>$("pickD").close();
 async function loadShared(){if(!user)return;const L=$("sjList");L.innerHTML='<p class="msg">Loading…</p>';
  const{data,error}=await sb.rpc("get_my_shared_journals");sharedOK=!error;$("shHint").hidden=sharedOK;
  if(error){console.warn("shared:",error.message);L.innerHTML="";return}
  const rows=(data||[]).slice().sort((x,y)=>Date.parse(y.last_viewed_at)-Date.parse(x.last_viewed_at));if(!rows.length){L.innerHTML='<div class="empty">No shared journals yet.<br>When someone sends you their journal link, tap <b>+ Add a shared link</b> above and paste it — or open the link while signed in here.</div>';return}
- const paths=rows.map(r=>r.cover_path).filter(Boolean),m=paths.length?await signPaths(paths):{};L.innerHTML="";
+ const covOf=r=>r.my_cover_path||r.owner_cover_path||r.cover_path||null;const paths=[...new Set(rows.map(covOf).filter(Boolean))],m=paths.length?await signPaths(paths):{};L.innerHTML="";
  rows.forEach(r=>{const a=document.createElement("div");a.className="sj";a.innerHTML='<a class="sjopen"><div class="sjcov"></div><div class="sjtx"><div class="sjt"></div><div class="sjm"></div></div></a><button type="button" class="icon sjx" aria-label="Options">⋯</button>';
   const link=a.querySelector(".sjopen");link.href=location.pathname+"#share="+r.share_token;
-  a.querySelector(".sjt").textContent=(r.title||DEF_TITLE).toUpperCase();a.querySelector(".sjm").textContent=r.post_count+(r.post_count==1?" post":" posts")+" · viewed "+ago(r.last_viewed_at);
-  const u=r.cover_path&&m[r.cover_path];if(u){const i=new Image();i.src=u;i.alt="";i.loading="lazy";i.onerror=()=>i.remove();a.querySelector(".sjcov").appendChild(i)}
-  a.querySelector(".sjx").onclick=async()=>{if(!confirm("Remove “"+(r.title||DEF_TITLE)+"” from Shared with me? You can add it back by opening their link again."))return;
-   const{error}=await sb.from("shared_views").delete().eq("viewer_id",user.id).eq("share_token",r.share_token);if(error)return alert(error.message);a.remove();if(!L.children.length)loadShared()};
+  const orig=(r.title||DEF_TITLE).toUpperCase(),nick=(r.nickname||"").trim();nickByToken[r.share_token]=nick;
+  a.querySelector(".sjt").textContent=nick||orig;a.querySelector(".sjm").textContent=(nick?orig+" · ":"")+r.post_count+(r.post_count==1?" post":" posts")+" · viewed "+ago(r.last_viewed_at);
+  if(nick)a.querySelector(".sjt").classList.add("nick");
+  const cp=covOf(r),u=cp&&m[cp];a.covUrl=u||"";if(u){const i=new Image();i.src=u;i.alt="";i.loading="lazy";i.onerror=()=>i.remove();a.querySelector(".sjcov").appendChild(i)}
+  a.querySelector(".sjx").onclick=()=>{sjCur={r,el:a,orig,nick,covUrl:a.covUrl,custom:!!(r.my_cover_path||r.owner_cover_path)};$("sjD").showModal()};
   L.appendChild(a)})}
 /* ---------- switching between viewer mode and the owner's app, without reloading ----------
    (v11 bug: "My journal" did location.replace(path) immediately followed by location.reload();
